@@ -88,7 +88,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish
-        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   # ── Update Homebrew tap automatically ─────────────────────────────────────
   homebrew:
@@ -174,20 +174,22 @@ jobs:
           set -e
           CONTENT=$(base64 -w 0 /tmp/krait.rb)
 
-          RESPONSE=$(curl -sf \
+          # Get existing file SHA if it exists (empty on first release)
+          FILE_SHA=$(curl -s \
             -H "Authorization: token $TAP_TOKEN" \
-            "https://api.github.com/repos/Codestz/homebrew-krait/contents/Formula/krait.rb")
-          FILE_SHA=$(echo "$RESPONSE" | jq -r '.sha')
+            "https://api.github.com/repos/Codestz/homebrew-krait/contents/Formula/krait.rb" \
+            | jq -r '.sha // empty')
 
-          if [ "$FILE_SHA" = "null" ] || [ -z "$FILE_SHA" ]; then
-            echo "::error::Failed to get file SHA from tap repo. Check HOMEBREW_TAP_TOKEN."
-            exit 1
+          if [ -n "$FILE_SHA" ]; then
+            PAYLOAD="{\"message\":\"chore: bump to v${VERSION}\",\"content\":\"${CONTENT}\",\"sha\":\"${FILE_SHA}\"}"
+          else
+            PAYLOAD="{\"message\":\"chore: add formula for v${VERSION}\",\"content\":\"${CONTENT}\"}"
           fi
 
           curl -sf -X PUT \
             -H "Authorization: token $TAP_TOKEN" \
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/Codestz/homebrew-krait/contents/Formula/krait.rb" \
-            -d "{\"message\":\"chore: bump to v${VERSION}\",\"content\":\"${CONTENT}\",\"sha\":\"${FILE_SHA}\"}"
+            -d "$PAYLOAD"
 
           echo "Homebrew tap updated to v${VERSION}"
