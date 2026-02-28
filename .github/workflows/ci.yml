@@ -70,7 +70,7 @@ jobs:
       # LSP e2e tests are marked #[ignore] — run locally with: cargo test -- --ignored
 
   msrv:
-    name: Minimum Supported Rust Version (${{ env.MSRV }})
+    name: Minimum Supported Rust Version (1.75)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
