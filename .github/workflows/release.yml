@@ -1,0 +1,193 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build binaries for all platforms ──────────────────────────────────────
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            use_cross: false
+          - os: macos-15
+            target: x86_64-apple-darwin
+            use_cross: false
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            use_cross: false
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            use_cross: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install cross (ARM Linux)
+        if: matrix.use_cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build (native)
+        if: "!matrix.use_cross"
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (cross)
+        if: matrix.use_cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        shell: bash
+        run: |
+          ARCHIVE="krait-${{ matrix.target }}.tar.gz"
+          tar czf "$ARCHIVE" -C "target/${{ matrix.target }}/release" krait
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARCHIVE }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+
+  # ── Publish to crates.io ───────────────────────────────────────────────────
+  publish:
+    name: Publish to crates.io
+    needs: build
+    runs-on: ubuntu-22.04
+    if: "!contains(github.ref_name, '-')"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish
+        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+
+  # ── Update Homebrew tap automatically ─────────────────────────────────────
+  homebrew:
+    name: Update Homebrew formula
+    needs: build
+    runs-on: ubuntu-22.04
+    if: "!contains(github.ref_name, '-')"
+
+    steps:
+      - name: Wait for release assets to be available
+        run: sleep 30
+
+      - name: Download release assets and compute SHA256
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+          for target in aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu; do
+            ASSET="krait-${target}.tar.gz"
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET" --dir /tmp/dl
+            SHA=$(sha256sum "/tmp/dl/$ASSET" | awk '{print $1}')
+            ENV_NAME="SHA_$(echo "$target" | tr '[:lower:]-' '[:upper:]_')"
+            echo "${ENV_NAME}=${SHA}" >> "$GITHUB_ENV"
+          done
+
+      - name: Generate formula
+        run: |
+          cat > /tmp/krait.rb <<FORMULA
+          class Krait < Formula
+            desc "Code intelligence CLI for AI agents — LSP-backed symbol search and semantic editing"
+            homepage "https://github.com/Codestz/krait"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/Codestz/krait/releases/download/v#{version}/krait-aarch64-apple-darwin.tar.gz"
+                sha256 "${SHA_AARCH64_APPLE_DARWIN}"
+              else
+                url "https://github.com/Codestz/krait/releases/download/v#{version}/krait-x86_64-apple-darwin.tar.gz"
+                sha256 "${SHA_X86_64_APPLE_DARWIN}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/Codestz/krait/releases/download/v#{version}/krait-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "${SHA_AARCH64_UNKNOWN_LINUX_GNU}"
+              else
+                url "https://github.com/Codestz/krait/releases/download/v#{version}/krait-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${SHA_X86_64_UNKNOWN_LINUX_GNU}"
+              end
+            end
+
+            def install
+              bin.install "krait"
+            end
+
+            def caveats
+              <<~EOS
+                krait auto-installs language servers on first use.
+                Run \`krait init\` in your project to generate a workspace config.
+
+                TypeScript: npm install -g @vtsls/language-server
+                Go:         go install golang.org/x/tools/gopls@latest
+                Rust:       rustup component add rust-analyzer
+              EOS
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/krait --version")
+            end
+          end
+          FORMULA
+          sed -i 's/^          //' /tmp/krait.rb
+
+      - name: Push formula to homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -e
+          CONTENT=$(base64 -w 0 /tmp/krait.rb)
+
+          RESPONSE=$(curl -sf \
+            -H "Authorization: token $TAP_TOKEN" \
+            "https://api.github.com/repos/Codestz/homebrew-krait/contents/Formula/krait.rb")
+          FILE_SHA=$(echo "$RESPONSE" | jq -r '.sha')
+
+          if [ "$FILE_SHA" = "null" ] || [ -z "$FILE_SHA" ]; then
+            echo "::error::Failed to get file SHA from tap repo. Check HOMEBREW_TAP_TOKEN."
+            exit 1
+          fi
+
+          curl -sf -X PUT \
+            -H "Authorization: token $TAP_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/Codestz/homebrew-krait/contents/Formula/krait.rb" \
+            -d "{\"message\":\"chore: bump to v${VERSION}\",\"content\":\"${CONTENT}\",\"sha\":\"${FILE_SHA}\"}"
+
+          echo "Homebrew tap updated to v${VERSION}"

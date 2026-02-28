@@ -1,0 +1,86 @@
+[package]
+name = "krait"
+version = "0.1.0"
+edition = "2021"
+description = "Code intelligence CLI for AI agents"
+license = "MIT"
+readme = "README.md"
+keywords = ["lsp", "code-intelligence", "cli", "ai", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = [".github", "bench", "tests/fixtures", ".agents", ".claude"]
+
+[lib]
+name = "krait"
+path = "src/lib.rs"
+
+[[bin]]
+name = "krait"
+path = "src/main.rs"
+
+[dependencies]
+# Core
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+
+# LSP
+lsp-types = "0.97"
+url = "2"
+
+# Config file parsing
+toml = "0.8"
+
+# Hashing for project root -> socket path + file content hashing
+blake3 = "1"
+
+# SQLite symbol index
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Project file walking (.gitignore-aware)
+ignore = "0.4"
+
+# Pattern matching for krait search
+regex = "1"
+
+# Parallel iterators for file hashing
+rayon = "1"
+
+# File system watching for cache invalidation
+notify-debouncer-full = "0.3"
+
+# Thread-safe concurrent hash map for DiagnosticStore
+dashmap = "6"
+
+# Unix process management
+libc = "0.2"
+
+# XDG base directories
+dirs = "6"
+
+# Binary lookup in PATH
+which = "7"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+
+[lints.rust]
+future-incompatible = { level = "warn", priority = -1 }
+nonstandard_style = { level = "deny", priority = -2 }
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -2 }

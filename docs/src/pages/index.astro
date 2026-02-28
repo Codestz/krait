@@ -1,0 +1,253 @@
+---
+import '../styles/landing.css';
+
+const version = 'v0.1.0';
+const githubUrl = 'https://github.com/Codestz/krait';
+
+const features = [
+  {
+    icon: 'S',
+    title: 'Semantic Editing',
+    desc: 'Edit by symbol name, not line number. The LSP defines boundaries — no line number drift, no file corruption.',
+  },
+  {
+    icon: 'Q',
+    title: 'Warm Queries in ~20ms',
+    desc: 'A persistent daemon keeps LSP servers alive between calls. No cold start on every query.',
+  },
+  {
+    icon: 'M',
+    title: 'Monorepo-Native',
+    desc: 'Tested on 76-workspace TypeScript monorepos. One LSP process per language, dynamically attaches folders.',
+  },
+  {
+    icon: 'A',
+    title: 'Agent-First Output',
+    desc: 'Compact, token-efficient output designed for LLM context windows. Get the signal, not the noise.',
+  },
+];
+
+const benchmarks = [
+  { project: 'medusa', stack: 'TypeScript', workspaces: 76, findSymbol: '~59ms', listSymbols: '~40ms', hover: '~41ms', check: '~37ms' },
+  { project: 'meet', stack: 'TypeScript', workspaces: 6, findSymbol: '~40ms', listSymbols: '~33ms', hover: '~46ms', check: '~40ms' },
+  { project: 'WeKnora', stack: 'Go', workspaces: 3, findSymbol: '~32ms', listSymbols: '~44ms', hover: '~61ms', check: '~50ms' },
+];
+
+const languages = [
+  { name: 'TypeScript', server: 'vtsls', color: '#3178C6' },
+  { name: 'JavaScript', server: 'vtsls', color: '#F7DF1E' },
+  { name: 'Go', server: 'gopls', color: '#00ADD8' },
+  { name: 'Rust', server: 'rust-analyzer', color: '#CE412B' },
+  { name: 'C/C++', server: 'clangd', color: '#00599C' },
+];
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="krait — Code intelligence CLI for AI agents. LSP-backed symbol search, semantic editing, and diagnostics in a single Rust binary." />
+  <title>krait — Code intelligence for AI agents</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="container nav-inner">
+    <a href="/" class="logo">
+      <span class="logo-mark">k</span>
+      <span class="logo-text">krait</span>
+      <span class="version-badge">{version}</span>
+    </a>
+    <div class="nav-links">
+      <a href="/getting-started/installation/" class="nav-link">Docs</a>
+      <a href={githubUrl} class="nav-link" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://crates.io/crates/krait" class="nav-link" target="_blank" rel="noopener">crates.io</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container hero-inner">
+    <div class="hero-text">
+      <h1 class="hero-title">
+        Code intelligence<br/>
+        <span class="accent">for AI agents</span>
+      </h1>
+      <p class="hero-sub">
+        LSP-backed symbol search, semantic editing, and diagnostics in a single Rust binary.
+        No line numbers. No file parsing. The LSP is the source of truth.
+      </p>
+      <div class="hero-ctas">
+        <a href="/docs/getting-started/installation/" class="btn btn-primary">Get started</a>
+        <a href={githubUrl} class="btn btn-secondary" target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+    </div>
+    <div class="hero-terminal">
+      <div class="terminal-window">
+        <div class="terminal-bar">
+          <span class="dot dot-red"></span>
+          <span class="dot dot-yellow"></span>
+          <span class="dot dot-green"></span>
+          <span class="terminal-title">krait</span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line"><span class="prompt">$</span> <span class="cmd">krait find symbol PaymentService</span></div>
+          <div class="terminal-output">class PaymentService  src/payments/service.ts:24</div>
+          <div class="terminal-line"><span class="prompt">$</span> <span class="cmd">krait hover PaymentService</span></div>
+          <div class="terminal-output">class PaymentService extends BaseService</div>
+          <div class="terminal-output muted">Handles payment processing and refunds.</div>
+          <div class="terminal-output muted">src/payments/service.ts:24</div>
+          <div class="terminal-line"><span class="prompt">$</span> <span class="cmd">krait check src/payments/service.ts</span></div>
+          <div class="terminal-output error">error src/payments/service.ts:45:12 TS2339</div>
+          <div class="terminal-output muted">Property 'amount' does not exist</div>
+          <div class="terminal-line"><span class="prompt">$</span> <span class="cmd">cat fix.ts | krait edit replace processPayment</span></div>
+          <div class="terminal-output success">replaced processPayment  src/payments/service.ts:67</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features">
+  <div class="container">
+    <h2 class="section-title">Built for AI agents</h2>
+    <div class="feature-grid">
+      {features.map(f => (
+        <div class="feature-card">
+          <div class="feature-icon-box">{f.icon}</div>
+          <h3 class="feature-title">{f.title}</h3>
+          <p class="feature-desc">{f.desc}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="how-it-works">
+  <div class="container">
+    <h2 class="section-title">How it works</h2>
+    <div class="arch-diagram">
+      <pre class="arch-ascii">
+AI Agent  (krait find symbol Foo)
+    |
+    | Unix socket
+    v
+krait daemon (per project)
+  +-- SQLite index + file watcher
+  +-- LSP Multiplexer (one server/language)
+         |
+         +-- vtsls (TypeScript)
+         +-- gopls (Go)
+         +-- rust-analyzer (Rust)
+      </pre>
+    </div>
+    <div class="how-steps">
+      <div class="step"><span class="step-num">1</span><div><strong>CLI</strong> — thin proxy, sends requests over a Unix domain socket</div></div>
+      <div class="step"><span class="step-num">2</span><div><strong>Daemon</strong> — one process per project root, manages LSP lifecycles</div></div>
+      <div class="step"><span class="step-num">3</span><div><strong>LSP Multiplexer</strong> — one language server per language, dynamically attaches workspace folders</div></div>
+      <div class="step"><span class="step-num">4</span><div><strong>SQLite index</strong> — warm query cache, invalidated by file watcher</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Performance -->
+<section class="performance">
+  <div class="container">
+    <h2 class="section-title">Performance</h2>
+    <p class="section-sub">Warm query latency — daemon running, LSP fully initialized</p>
+    <div class="table-wrapper">
+      <table class="bench-table">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Stack</th>
+            <th>Workspaces</th>
+            <th>find symbol</th>
+            <th>list symbols</th>
+            <th>hover</th>
+            <th>check</th>
+          </tr>
+        </thead>
+        <tbody>
+          {benchmarks.map(b => (
+            <tr>
+              <td class="project-name">{b.project}</td>
+              <td>{b.stack}</td>
+              <td class="center">{b.workspaces}</td>
+              <td class="perf">{b.findSymbol}</td>
+              <td class="perf">{b.listSymbols}</td>
+              <td class="perf">{b.hover}</td>
+              <td class="perf">{b.check}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Languages -->
+<section class="languages">
+  <div class="container">
+    <h2 class="section-title">Language support</h2>
+    <div class="lang-grid">
+      {languages.map(l => (
+        <div class="lang-card">
+          <div class="lang-dot" style={`background: ${l.color}`}></div>
+          <div class="lang-name">{l.name}</div>
+          <div class="lang-server">{l.server}</div>
+        </div>
+      ))}
+    </div>
+    <p class="lang-note">v0.1 ships with these 5 languages. More coming in future releases.</p>
+  </div>
+</section>
+
+<!-- Install -->
+<section class="install">
+  <div class="container">
+    <h2 class="section-title">Install</h2>
+    <div class="install-tabs">
+      <div class="install-option">
+        <div class="install-label">From crates.io</div>
+        <div class="install-cmd">
+          <code>cargo install krait</code>
+        </div>
+      </div>
+      <div class="install-option">
+        <div class="install-label">Pre-built binary</div>
+        <div class="install-cmd">
+          <a href="https://github.com/Codestz/krait/releases" class="install-link">Download from GitHub Releases</a>
+        </div>
+      </div>
+    </div>
+    <div class="install-next">
+      <a href="/docs/getting-started/installation/" class="btn btn-primary">Full installation guide</a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-left">
+      <span class="logo-text">krait</span>
+      <span class="footer-license">MIT License</span>
+    </div>
+    <div class="footer-links">
+      <a href={githubUrl} target="_blank" rel="noopener">GitHub</a>
+      <a href="https://crates.io/crates/krait" target="_blank" rel="noopener">crates.io</a>
+      <a href="/getting-started/installation/">Docs</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,21 @@
+/* Starlight theme overrides — no Tailwind directives here */
+
+:root,
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #0a3d30;
+  --sl-color-accent: #00D4A8;
+  --sl-color-accent-high: #4de8c8;
+  --sl-color-bg: #0C0E14;
+  --sl-color-bg-sidebar: #13161F;
+  --sl-color-bg-nav: #0C0E14;
+  --sl-color-hairline-light: rgba(0, 212, 168, 0.12);
+  --sl-color-hairline: rgba(0, 212, 168, 0.12);
+}
+
+/* Terminal-style code blocks */
+.astro-code,
+pre:not([class*='language-']) {
+  background: #13161F !important;
+  border: 1px solid rgba(0, 212, 168, 0.15);
+  border-radius: 8px;
+}

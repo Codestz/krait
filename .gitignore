@@ -1,0 +1,32 @@
+# Build artifacts
+/target
+tests/fixtures/**/target/
+*.swp
+*.swo
+
+# Cargo.lock is intentionally excluded — krait is a library+binary.
+# Binaries should commit Cargo.lock; libraries should not.
+# We follow library convention since krait is also published as a crate.
+Cargo.lock
+
+# macOS
+.DS_Store
+
+# krait runtime files (generated when running krait inside this repo)
+.krait/
+/bench
+/internal-docs
+
+# Unix sockets
+*.sock
+
+# Docs build artifacts
+docs/node_modules/
+docs/dist/
+docs/.astro/
+
+# Internal dev tooling (not part of the public project)
+.agents/
+.claude/
+.mcp.json
+skills-lock.json
