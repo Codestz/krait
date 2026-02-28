@@ -1,7 +1,5 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import tailwind from '@astrojs/tailwind';
-
 export default defineConfig({
   site: 'https://codestz.github.io',
   base: '/krait',
@@ -18,9 +16,9 @@ export default defineConfig({
         dark: './src/assets/logo-dark.svg',
         replacesTitle: false,
       },
-      social: {
-        github: 'https://github.com/Codestz/krait',
-      },
+      social: [
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/Codestz/krait' },
+      ],
       customCss: ['./src/styles/custom.css'],
       sidebar: [
         {
@@ -52,6 +50,5 @@ export default defineConfig({
         },
       ],
     }),
-    tailwind({ applyBaseStyles: false }),
   ],
 });
