@@ -6,7 +6,7 @@ description: How to install krait on your system.
 ## From Source (Rust 1.85+)
 
 ```bash
-cargo install krait
+cargo install krait-cli
 ```
 
 ## Pre-built Binaries

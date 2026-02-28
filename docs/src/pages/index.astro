@@ -3,6 +3,7 @@ import '../styles/landing.css';
 
 const version = 'v0.1.0';
 const githubUrl = 'https://github.com/Codestz/krait';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 const features = [
   {
@@ -57,15 +58,15 @@ const languages = [
 <!-- Navbar -->
 <nav class="navbar">
   <div class="container nav-inner">
-    <a href="/" class="logo">
+    <a href={`${base}/`} class="logo">
       <span class="logo-mark">k</span>
       <span class="logo-text">krait</span>
       <span class="version-badge">{version}</span>
     </a>
     <div class="nav-links">
-      <a href="/getting-started/installation/" class="nav-link">Docs</a>
+      <a href={`${base}/getting-started/installation/`} class="nav-link">Docs</a>
       <a href={githubUrl} class="nav-link" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://crates.io/crates/krait" class="nav-link" target="_blank" rel="noopener">crates.io</a>
+      <a href="https://crates.io/crates/krait-cli" class="nav-link" target="_blank" rel="noopener">crates.io</a>
     </div>
   </div>
 </nav>
@@ -83,7 +84,7 @@ const languages = [
         No line numbers. No file parsing. The LSP is the source of truth.
       </p>
       <div class="hero-ctas">
-        <a href="/docs/getting-started/installation/" class="btn btn-primary">Get started</a>
+        <a href={`${base}/getting-started/installation/`} class="btn btn-primary">Get started</a>
         <a href={githubUrl} class="btn btn-secondary" target="_blank" rel="noopener">View on GitHub</a>
       </div>
     </div>
@@ -218,7 +219,7 @@ krait daemon (per project)
       <div class="install-option">
         <div class="install-label">From crates.io</div>
         <div class="install-cmd">
-          <code>cargo install krait</code>
+          <code>cargo install krait-cli</code>
         </div>
       </div>
       <div class="install-option">
@@ -229,7 +230,7 @@ krait daemon (per project)
       </div>
     </div>
     <div class="install-next">
-      <a href="/docs/getting-started/installation/" class="btn btn-primary">Full installation guide</a>
+      <a href={`${base}/getting-started/installation/`} class="btn btn-primary">Full installation guide</a>
     </div>
   </div>
 </section>
@@ -243,8 +244,8 @@ krait daemon (per project)
     </div>
     <div class="footer-links">
       <a href={githubUrl} target="_blank" rel="noopener">GitHub</a>
-      <a href="https://crates.io/crates/krait" target="_blank" rel="noopener">crates.io</a>
-      <a href="/getting-started/installation/">Docs</a>
+      <a href="https://crates.io/crates/krait-cli" target="_blank" rel="noopener">crates.io</a>
+      <a href={`${base}/getting-started/installation/`}>Docs</a>
     </div>
   </div>
 </footer>

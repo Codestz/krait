@@ -1,5 +1,5 @@
 [package]
-name = "krait"
+name = "krait-cli"
 version = "0.1.0"
 edition = "2021"
 description = "Code intelligence CLI for AI agents"
