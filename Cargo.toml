@@ -49,7 +49,7 @@ regex = "1"
 rayon = "1"
 
 # File system watching for cache invalidation
-notify-debouncer-full = "0.3"
+notify-debouncer-full = "0.7"
 
 # Thread-safe concurrent hash map for DiagnosticStore
 dashmap = "6"
