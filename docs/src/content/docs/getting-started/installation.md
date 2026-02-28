@@ -3,6 +3,13 @@ title: Installation
 description: How to install krait on your system.
 ---
 
+## Homebrew (macOS / Linux)
+
+```bash
+brew tap Codestz/krait
+brew install krait
+```
+
 ## From Source (Rust 1.85+)
 
 ```bash

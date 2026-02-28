@@ -3,7 +3,7 @@
 **Code intelligence CLI for AI agents** — LSP-backed symbol search, semantic editing, diagnostics, and hover in a single Rust binary.
 
 [![CI](https://github.com/Codestz/krait/actions/workflows/ci.yml/badge.svg)](https://github.com/Codestz/krait/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/krait.svg)](https://crates.io/crates/krait)
+[![Crates.io](https://img.shields.io/crates/v/krait-cli.svg)](https://crates.io/crates/krait-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **v0.1 — Initial release.** Core language support: TypeScript, JavaScript, Go, Rust, and C++.
@@ -60,6 +60,13 @@ Krait occupies the space in between: a headless LSP client you can use from any 
 ---
 
 ## Installation
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap Codestz/krait
+brew install krait
+```
 
 ### From source (requires Rust 1.85+)
 
