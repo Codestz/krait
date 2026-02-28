@@ -9,8 +9,24 @@ permissions:
   contents: write
 
 jobs:
+  create-release:
+    name: Create release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create draft release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --draft \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: Build ${{ matrix.target }}
+    needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -67,16 +83,38 @@ jobs:
           tar czf "$ARCHIVE" -C "target/${{ matrix.target }}/release" krait
           echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: ${{ env.ARCHIVE }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          name: krait-${{ matrix.target }}
+          path: ${{ env.ARCHIVE }}
+          retention-days: 1
+
+  upload-release:
+    name: Upload release assets
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Upload binaries and publish release
+        run: |
+          gh release upload "$GITHUB_REF_NAME" artifacts/*.tar.gz \
+            --repo "$GITHUB_REPOSITORY"
+          gh release edit "$GITHUB_REF_NAME" \
+            --draft=false \
+            --prerelease=${{ contains(github.ref_name, '-') }} \
+            --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
     name: Publish to crates.io
-    needs: build
+    needs: upload-release
     runs-on: ubuntu-22.04
     if: "!contains(github.ref_name, '-')"
 
@@ -91,14 +129,11 @@ jobs:
 
   homebrew:
     name: Update Homebrew formula
-    needs: build
+    needs: upload-release
     runs-on: ubuntu-22.04
     if: "!contains(github.ref_name, '-')"
 
     steps:
-      - name: Wait for release assets to be available
-        run: sleep 30
-
       - name: Download release assets and compute SHAs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -183,11 +218,10 @@ jobs:
             PAYLOAD="{\"message\":\"chore: add formula for v${VERSION}\",\"content\":\"${CONTENT}\"}"
           fi
 
-          RESULT=$(curl -sf -X PUT \
+          curl -sf -X PUT \
             -H "Authorization: token $TAP_TOKEN" \
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/Codestz/homebrew-krait/contents/Formula/krait.rb" \
-            -d "$PAYLOAD")
+            -d "$PAYLOAD"
 
           echo "Homebrew tap updated to v${VERSION}"
-          echo "$RESULT" | jq '.commit.sha'
