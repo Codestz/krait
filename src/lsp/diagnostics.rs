@@ -142,7 +142,13 @@ fn parse_entry(v: &Value) -> Option<DiagnosticEntry> {
             c.as_u64().map(|n| n.to_string())
         }
     });
-    Some(DiagnosticEntry { severity, line, col, code, message })
+    Some(DiagnosticEntry {
+        severity,
+        line,
+        col,
+        code,
+        message,
+    })
 }
 
 /// Strip `file://` prefix from a URI and return a `PathBuf`.

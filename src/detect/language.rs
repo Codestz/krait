@@ -64,7 +64,10 @@ impl Language {
 #[must_use]
 pub fn language_for_file(path: &Path) -> Option<Language> {
     let ext = path.extension()?.to_str()?;
-    Language::ALL.iter().copied().find(|lang| lang.extensions().contains(&ext))
+    Language::ALL
+        .iter()
+        .copied()
+        .find(|lang| lang.extensions().contains(&ext))
 }
 
 impl std::fmt::Display for Language {
@@ -83,13 +86,23 @@ const MONOREPO_DIRS: &[&str] = &["packages", "apps", "libs", "src"];
 pub fn detect_languages(root: &Path) -> Vec<Language> {
     let mut languages = Vec::new();
 
-    if Language::Rust.workspace_markers().iter().any(|m| root.join(m).exists()) {
+    if Language::Rust
+        .workspace_markers()
+        .iter()
+        .any(|m| root.join(m).exists())
+    {
         languages.push(Language::Rust);
     }
 
     // TypeScript and JavaScript share package.json; tsconfig.json or .ts files disambiguate.
-    let has_tsconfig = Language::TypeScript.workspace_markers().iter().any(|m| root.join(m).exists());
-    let has_package_json = Language::JavaScript.workspace_markers().iter().any(|m| root.join(m).exists());
+    let has_tsconfig = Language::TypeScript
+        .workspace_markers()
+        .iter()
+        .any(|m| root.join(m).exists());
+    let has_package_json = Language::JavaScript
+        .workspace_markers()
+        .iter()
+        .any(|m| root.join(m).exists());
 
     if has_tsconfig || has_ts_files(root) {
         languages.push(Language::TypeScript);
@@ -97,11 +110,19 @@ pub fn detect_languages(root: &Path) -> Vec<Language> {
         languages.push(Language::JavaScript);
     }
 
-    if Language::Go.workspace_markers().iter().any(|m| root.join(m).exists()) {
+    if Language::Go
+        .workspace_markers()
+        .iter()
+        .any(|m| root.join(m).exists())
+    {
         languages.push(Language::Go);
     }
 
-    if Language::Cpp.workspace_markers().iter().any(|m| root.join(m).exists()) {
+    if Language::Cpp
+        .workspace_markers()
+        .iter()
+        .any(|m| root.join(m).exists())
+    {
         languages.push(Language::Cpp);
     }
 
@@ -124,7 +145,11 @@ fn has_ts_files(root: &Path) -> bool {
                 let pkg = entry.path();
                 if pkg.is_dir() {
                     // tsconfig.json in a package is a strong signal
-                    if Language::TypeScript.workspace_markers().iter().any(|m| pkg.join(m).exists()) {
+                    if Language::TypeScript
+                        .workspace_markers()
+                        .iter()
+                        .any(|m| pkg.join(m).exists())
+                    {
                         return true;
                     }
                     let pkg_src = pkg.join("src");
@@ -138,7 +163,9 @@ fn has_ts_files(root: &Path) -> bool {
 
     let ts_exts = Language::TypeScript.extensions();
     for dir in &dirs {
-        let Ok(entries) = std::fs::read_dir(dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
         if entries.filter_map(Result::ok).any(|e| {
             e.path()
                 .extension()

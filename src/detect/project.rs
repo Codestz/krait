@@ -46,7 +46,6 @@ pub fn socket_path(project_root: &Path) -> PathBuf {
     std::env::temp_dir().join(format!("krait-{short}.sock"))
 }
 
-
 /// Find all LSP workspace roots within a project for monorepo support.
 ///
 /// Recursively walks the entire project tree (respecting `.gitignore`) to find
@@ -127,7 +126,6 @@ pub fn find_package_roots(project_root: &Path) -> Vec<(Language, PathBuf)> {
 
     result
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -214,7 +212,11 @@ mod tests {
             .filter(|(l, _)| *l == Language::TypeScript)
             .collect();
 
-        assert_eq!(rust_roots.len(), 1, "one Rust root (workspace covers crates)");
+        assert_eq!(
+            rust_roots.len(),
+            1,
+            "one Rust root (workspace covers crates)"
+        );
         assert_eq!(ts_roots.len(), 1, "one TypeScript root");
     }
 

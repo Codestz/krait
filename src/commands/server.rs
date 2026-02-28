@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::cli::OutputFormat;
 use crate::config::parse_language;
@@ -19,14 +19,16 @@ pub struct ServerListEntry {
 }
 
 /// Build the list of all servers and their install status.
-#[must_use] 
+#[must_use]
 pub fn build_server_list() -> Vec<ServerListEntry> {
     let mut seen_binaries = std::collections::HashSet::new();
     let mut rows = Vec::new();
 
     for &lang in Language::ALL {
         let entries = get_entries(lang);
-        let Some(preferred) = entries.first() else { continue };
+        let Some(preferred) = entries.first() else {
+            continue;
+        };
 
         // Skip JavaScript if it shares the same binary as TypeScript (already shown).
         if seen_binaries.contains(preferred.binary_name) {
@@ -89,8 +91,7 @@ pub async fn handle_install(
     format: OutputFormat,
 ) -> anyhow::Result<()> {
     let languages: Vec<Language> = if let Some(name) = lang {
-        let l = parse_language(name)
-            .ok_or_else(|| anyhow::anyhow!("unknown language: {name}"))?;
+        let l = parse_language(name).ok_or_else(|| anyhow::anyhow!("unknown language: {name}"))?;
         vec![l]
     } else {
         Language::ALL.to_vec()
@@ -139,8 +140,9 @@ pub async fn handle_install(
             let managed_dir = servers_dir();
             let managed = managed_dir.join(preferred.binary_name);
             if managed.exists() {
-                std::fs::remove_file(&managed)
-                    .unwrap_or_else(|e| tracing::warn!("could not remove {}: {e}", managed.display()));
+                std::fs::remove_file(&managed).unwrap_or_else(|e| {
+                    tracing::warn!("could not remove {}: {e}", managed.display())
+                });
             }
         }
 
@@ -158,11 +160,7 @@ pub async fn handle_install(
                             }))?
                         );
                     }
-                    _ => println!(
-                        "installed {} → {}",
-                        preferred.binary_name,
-                        path.display()
-                    ),
+                    _ => println!("installed {} → {}", preferred.binary_name, path.display()),
                 }
             }
             Err(e) => {
@@ -206,9 +204,7 @@ pub fn handle_clean(format: OutputFormat) -> anyhow::Result<()> {
             if bytes == 0 {
                 println!("nothing to clean (~/.krait/servers/ was empty or missing)");
             } else {
-                println!(
-                    "cleaned ~/.krait/servers/ ({mb:.1} MB freed)"
-                );
+                println!("cleaned ~/.krait/servers/ ({mb:.1} MB freed)");
             }
         }
     }
@@ -216,23 +212,41 @@ pub fn handle_clean(format: OutputFormat) -> anyhow::Result<()> {
 }
 
 /// Compact text formatter for server list (used by output/compact.rs too).
-#[must_use] 
+#[must_use]
 pub fn format_server_list(rows: &[ServerListEntry]) -> String {
     if rows.is_empty() {
         return "no servers configured".to_string();
     }
 
     // Column widths
-    let lang_w = rows.iter().map(|r| r.language.len()).max().unwrap_or(0).max(8);
-    let name_w = rows.iter().map(|r| r.server_name.len()).max().unwrap_or(0).max(11);
-    let stat_w = rows.iter().map(|r| r.status.len()).max().unwrap_or(0).max(13);
+    let lang_w = rows
+        .iter()
+        .map(|r| r.language.len())
+        .max()
+        .unwrap_or(0)
+        .max(8);
+    let name_w = rows
+        .iter()
+        .map(|r| r.server_name.len())
+        .max()
+        .unwrap_or(0)
+        .max(11);
+    let stat_w = rows
+        .iter()
+        .map(|r| r.status.len())
+        .max()
+        .unwrap_or(0)
+        .max(13);
 
     let mut out = String::new();
     for row in rows {
         let _ = writeln!(
             out,
             "{:<lang_w$}  {:<name_w$}  {:<stat_w$}  {}",
-            row.language, row.server_name, row.status, row.path,
+            row.language,
+            row.server_name,
+            row.status,
+            row.path,
             lang_w = lang_w,
             name_w = name_w,
             stat_w = stat_w,
@@ -256,7 +270,7 @@ pub fn format_server_list(rows: &[ServerListEntry]) -> String {
 
 /// Format a JSON server list value (array of objects) for compact output.
 /// Used by compact.rs when the daemon response is a server list.
-#[must_use] 
+#[must_use]
 pub fn format_server_list_json(items: &[Value]) -> String {
     let rows: Vec<ServerListEntry> = items
         .iter()

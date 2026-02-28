@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use anyhow::{Context, bail};
-use serde_json::{Value, json};
+use anyhow::{bail, Context};
+use serde_json::{json, Value};
 
 use super::client::LspClient;
 use super::files::FileTracker;
@@ -92,7 +92,9 @@ pub async fn resolve_symbol_range(
             // First try the current level; if not found, search the full subtree.
             // This handles methods inside classes (e.g. `createPromotions` inside
             // `PromotionModuleService`) without requiring dotted notation.
-            let found = current_list.iter().find(|s| name_matches(&s.name, part))
+            let found = current_list
+                .iter()
+                .find(|s| name_matches(&s.name, part))
                 .or_else(|| find_recursive(&tree, part));
             match found {
                 Some(sym) => {
@@ -145,7 +147,11 @@ fn find_recursive<'a>(nodes: &'a [SymbolLocation], name: &str) -> Option<&'a Sym
 }
 
 /// Collect ALL symbols with the given name (depth-first) into `out`.
-fn collect_recursive<'a>(nodes: &'a [SymbolLocation], name: &str, out: &mut Vec<&'a SymbolLocation>) {
+fn collect_recursive<'a>(
+    nodes: &'a [SymbolLocation],
+    name: &str,
+    out: &mut Vec<&'a SymbolLocation>,
+) {
     for node in nodes {
         if name_matches(&node.name, name) {
             out.push(node);

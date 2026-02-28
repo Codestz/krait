@@ -1,11 +1,11 @@
 use std::path::Path;
 
 use anyhow::Context;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::commands::find::resolve_symbol_location;
 use crate::commands::workspace_edit::{apply_workspace_edit, count_workspace_edits};
-use crate::lsp::client::{LspClient, path_to_uri};
+use crate::lsp::client::{path_to_uri, LspClient};
 use crate::lsp::files::FileTracker;
 
 /// Rename a symbol across all files using LSP `textDocument/rename`.
@@ -23,8 +23,7 @@ pub async fn handle_rename(
     file_tracker: &mut FileTracker,
     project_root: &Path,
 ) -> anyhow::Result<Value> {
-    let (abs_path, line, character) =
-        resolve_symbol_location(name, client, project_root).await?;
+    let (abs_path, line, character) = resolve_symbol_location(name, client, project_root).await?;
 
     file_tracker
         .ensure_open(&abs_path, client.transport_mut())

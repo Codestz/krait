@@ -1,7 +1,7 @@
 #![allow(clippy::missing_errors_doc)]
 use std::path::Path;
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 /// A discovered workspace entry from the index.
 #[derive(Debug, Clone)]
@@ -173,9 +173,7 @@ impl IndexStore {
                  VALUES (?1, ?2, ?3)
                  ON CONFLICT(path) DO UPDATE SET blake3_hash=?2, indexed_at=?3",
             )?;
-            let mut delete_stmt = self.conn.prepare(
-                "DELETE FROM symbols WHERE path = ?1",
-            )?;
+            let mut delete_stmt = self.conn.prepare("DELETE FROM symbols WHERE path = ?1")?;
             let mut insert_stmt = self.conn.prepare(
                 "INSERT INTO symbols (name, kind, path, range_start_line, range_start_col, range_end_line, range_end_col, parent_name)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -187,9 +185,13 @@ impl IndexStore {
                 delete_stmt.execute(params![rel_path])?;
                 for sym in symbols {
                     insert_stmt.execute(params![
-                        sym.name, sym.kind, rel_path,
-                        sym.range_start_line, sym.range_start_col,
-                        sym.range_end_line, sym.range_end_col,
+                        sym.name,
+                        sym.kind,
+                        rel_path,
+                        sym.range_start_line,
+                        sym.range_start_col,
+                        sym.range_end_line,
+                        sym.range_end_col,
                         sym.parent_name,
                     ])?;
                 }
@@ -346,9 +348,9 @@ impl IndexStore {
 
     /// List all workspaces.
     pub fn list_workspaces(&self) -> rusqlite::Result<Vec<WorkspaceInfo>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT path, language, status, last_used_at FROM workspaces ORDER BY path",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, language, status, last_used_at FROM workspaces ORDER BY path")?;
         let rows = stmt.query_map([], |row| {
             Ok(WorkspaceInfo {
                 path: row.get(0)?,
@@ -398,7 +400,9 @@ impl IndexStore {
     /// Count the total number of symbols in the database.
     pub fn count_all_symbols(&self) -> rusqlite::Result<u64> {
         self.conn
-            .query_row("SELECT COUNT(*) FROM symbols", [], |row| row.get::<_, u64>(0))
+            .query_row("SELECT COUNT(*) FROM symbols", [], |row| {
+                row.get::<_, u64>(0)
+            })
     }
 
     pub fn optimize(&self) -> rusqlite::Result<()> {
@@ -625,9 +629,7 @@ mod tests {
     #[test]
     fn cache_put_and_get() {
         let store = IndexStore::open_in_memory().unwrap();
-        store
-            .cache_put("hash123", r#"{"result": "ok"}"#)
-            .unwrap();
+        store.cache_put("hash123", r#"{"result": "ok"}"#).unwrap();
 
         let cached = store.cache_get("hash123").unwrap();
         assert_eq!(cached, Some(r#"{"result": "ok"}"#.to_string()));
@@ -678,8 +680,12 @@ mod tests {
     #[test]
     fn workspace_upsert_and_list() {
         let store = IndexStore::open_in_memory().unwrap();
-        store.upsert_workspace("packages/api", "typescript").unwrap();
-        store.upsert_workspace("packages/web", "typescript").unwrap();
+        store
+            .upsert_workspace("packages/api", "typescript")
+            .unwrap();
+        store
+            .upsert_workspace("packages/web", "typescript")
+            .unwrap();
         store.upsert_workspace(".", "go").unwrap();
 
         let workspaces = store.list_workspaces().unwrap();
@@ -693,7 +699,9 @@ mod tests {
     #[test]
     fn workspace_status_transitions() {
         let store = IndexStore::open_in_memory().unwrap();
-        store.upsert_workspace("packages/api", "typescript").unwrap();
+        store
+            .upsert_workspace("packages/api", "typescript")
+            .unwrap();
 
         let ws = &store.list_workspaces().unwrap()[0];
         assert_eq!(ws.status, "discovered");
@@ -712,7 +720,9 @@ mod tests {
     #[test]
     fn workspace_touch_updates_timestamp() {
         let store = IndexStore::open_in_memory().unwrap();
-        store.upsert_workspace("packages/api", "typescript").unwrap();
+        store
+            .upsert_workspace("packages/api", "typescript")
+            .unwrap();
         store.set_workspace_attached("packages/api").unwrap();
 
         let t1 = store.list_workspaces().unwrap()[0].last_used_at.unwrap();
@@ -725,8 +735,12 @@ mod tests {
     #[test]
     fn workspace_counts() {
         let store = IndexStore::open_in_memory().unwrap();
-        store.upsert_workspace("packages/api", "typescript").unwrap();
-        store.upsert_workspace("packages/web", "typescript").unwrap();
+        store
+            .upsert_workspace("packages/api", "typescript")
+            .unwrap();
+        store
+            .upsert_workspace("packages/web", "typescript")
+            .unwrap();
         store.upsert_workspace(".", "go").unwrap();
 
         let (total, attached) = store.workspace_counts().unwrap();
@@ -742,8 +756,12 @@ mod tests {
     #[test]
     fn workspace_lru_returns_oldest() {
         let store = IndexStore::open_in_memory().unwrap();
-        store.upsert_workspace("packages/api", "typescript").unwrap();
-        store.upsert_workspace("packages/web", "typescript").unwrap();
+        store
+            .upsert_workspace("packages/api", "typescript")
+            .unwrap();
+        store
+            .upsert_workspace("packages/web", "typescript")
+            .unwrap();
         store.upsert_workspace(".", "go").unwrap();
 
         // Nothing attached → no LRU
@@ -765,8 +783,12 @@ mod tests {
     #[test]
     fn workspace_clear() {
         let store = IndexStore::open_in_memory().unwrap();
-        store.upsert_workspace("packages/api", "typescript").unwrap();
-        store.upsert_workspace("packages/web", "typescript").unwrap();
+        store
+            .upsert_workspace("packages/api", "typescript")
+            .unwrap();
+        store
+            .upsert_workspace("packages/web", "typescript")
+            .unwrap();
 
         store.clear_workspaces().unwrap();
         let workspaces = store.list_workspaces().unwrap();

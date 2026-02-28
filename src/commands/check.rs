@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::lsp::diagnostics::{DiagSeverity, DiagnosticStore};
 
@@ -93,7 +93,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::lsp::diagnostics::{DiagnosticEntry, DiagnosticStore, DiagSeverity};
+    use crate::lsp::diagnostics::{DiagSeverity, DiagnosticEntry, DiagnosticStore};
 
     fn root() -> PathBuf {
         PathBuf::from("/project")

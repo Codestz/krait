@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use tracing::{debug, info, warn};
 
 use super::registry::{
-    ArchiveType, InstallMethod, ServerEntry, get_entry, resolve_download_url, resolve_server,
-    servers_dir,
+    get_entry, resolve_download_url, resolve_server, servers_dir, ArchiveType, InstallMethod,
+    ServerEntry,
 };
 use crate::detect::Language;
 
@@ -25,8 +25,8 @@ pub async fn ensure_server(language: Language) -> anyhow::Result<(PathBuf, Serve
     }
 
     // 2. None found — download the preferred (first) entry
-    let entry = get_entry(language)
-        .with_context(|| format!("no LSP server configured for {language}"))?;
+    let entry =
+        get_entry(language).with_context(|| format!("no LSP server configured for {language}"))?;
 
     info!("{} not found, downloading...", entry.binary_name);
     let path = download_server(&entry).await?;
@@ -60,8 +60,7 @@ async fn download_github_release(
     dir: &Path,
     archive: ArchiveType,
 ) -> anyhow::Result<PathBuf> {
-    let url = resolve_download_url(entry)
-        .context("cannot resolve download URL for this server")?;
+    let url = resolve_download_url(entry).context("cannot resolve download URL for this server")?;
 
     let target = dir.join(entry.binary_name);
     let tmp = dir.join(format!(".{}.tmp", entry.binary_name));
@@ -119,8 +118,7 @@ async fn download_github_release(
     {
         use std::os::unix::fs::PermissionsExt;
         let perms = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(&target, perms)
-            .context("failed to make binary executable")?;
+        std::fs::set_permissions(&target, perms).context("failed to make binary executable")?;
     }
 
     // Verify it can run
@@ -204,16 +202,16 @@ async fn download_npm(
         );
     }
 
-    info!("installed {} via npm to {}", entry.binary_name, bin_path.display());
+    info!(
+        "installed {} via npm to {}",
+        entry.binary_name,
+        bin_path.display()
+    );
     Ok(bin_path)
 }
 
 /// Install a Go binary via `go install`.
-async fn download_go(
-    entry: &ServerEntry,
-    dir: &Path,
-    module: &str,
-) -> anyhow::Result<PathBuf> {
+async fn download_go(entry: &ServerEntry, dir: &Path, module: &str) -> anyhow::Result<PathBuf> {
     if !command_exists("go") {
         bail!(
             "Go is required for {} but not found in PATH.\n  {}",
@@ -251,7 +249,11 @@ async fn download_go(
         );
     }
 
-    info!("installed {} via go install to {}", entry.binary_name, bin_path.display());
+    info!(
+        "installed {} via go install to {}",
+        entry.binary_name,
+        bin_path.display()
+    );
     Ok(bin_path)
 }
 
@@ -311,20 +313,18 @@ fn make_writable_recursive(path: &Path) {
 }
 
 fn dir_size(path: &Path) -> u64 {
-    std::fs::read_dir(path)
-        .ok()
-        .map_or(0, |entries| {
-            entries
-                .filter_map(Result::ok)
-                .map(|e| {
-                    if e.path().is_dir() {
-                        dir_size(&e.path())
-                    } else {
-                        e.metadata().map_or(0, |m| m.len())
-                    }
-                })
-                .sum()
-        })
+    std::fs::read_dir(path).ok().map_or(0, |entries| {
+        entries
+            .filter_map(Result::ok)
+            .map(|e| {
+                if e.path().is_dir() {
+                    dir_size(&e.path())
+                } else {
+                    e.metadata().map_or(0, |m| m.len())
+                }
+            })
+            .sum()
+    })
 }
 
 #[cfg(test)]

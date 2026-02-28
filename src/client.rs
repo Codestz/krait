@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tracing::debug;
@@ -108,18 +108,26 @@ pub fn command_to_request(command: &crate::cli::Command) -> Request {
             path: path.clone(),
             errors_only: *errors_only,
         },
-        Command::Find(FindCommand::Symbol { name, path, src_only, include_body }) => {
-            Request::FindSymbol { name: name.clone(), path_filter: path.clone(), src_only: *src_only, include_body: *include_body }
-        }
-        Command::Find(FindCommand::Refs { name, with_symbol }) => {
-            Request::FindRefs { name: name.clone(), with_symbol: *with_symbol }
-        }
-        Command::Find(FindCommand::Impl { name }) => {
-            Request::FindImpl { name: name.clone() }
-        }
-        Command::List(ListCommand::Symbols { path, depth }) => {
-            Request::ListSymbols { path: path.clone(), depth: *depth }
-        }
+        Command::Find(FindCommand::Symbol {
+            name,
+            path,
+            src_only,
+            include_body,
+        }) => Request::FindSymbol {
+            name: name.clone(),
+            path_filter: path.clone(),
+            src_only: *src_only,
+            include_body: *include_body,
+        },
+        Command::Find(FindCommand::Refs { name, with_symbol }) => Request::FindRefs {
+            name: name.clone(),
+            with_symbol: *with_symbol,
+        },
+        Command::Find(FindCommand::Impl { name }) => Request::FindImpl { name: name.clone() },
+        Command::List(ListCommand::Symbols { path, depth }) => Request::ListSymbols {
+            path: path.clone(),
+            depth: *depth,
+        },
         Command::Read(ReadCommand::File {
             path,
             from,
@@ -159,9 +167,10 @@ pub fn command_to_request(command: &crate::cli::Command) -> Request {
         Command::Daemon(_) => unreachable!("daemon commands are handled directly"),
         Command::Hover { name } => Request::Hover { name: name.clone() },
         Command::Format { path } => Request::Format { path: path.clone() },
-        Command::Rename { symbol, new_name } => {
-            Request::Rename { name: symbol.clone(), new_name: new_name.clone() }
-        }
+        Command::Rename { symbol, new_name } => Request::Rename {
+            name: symbol.clone(),
+            new_name: new_name.clone(),
+        },
         Command::Fix { path } => Request::Fix { path: path.clone() },
         Command::Watch { .. } => unreachable!("watch is handled client-side"),
         Command::Search { .. } => unreachable!("search is handled client-side"),
@@ -228,9 +237,9 @@ mod tests {
 
     #[test]
     fn command_to_request_list_symbols() {
-        use std::path::PathBuf;
         use crate::cli::{Command, ListCommand};
         use crate::protocol::Request;
+        use std::path::PathBuf;
 
         let cmd = Command::List(ListCommand::Symbols {
             path: PathBuf::from("src/lib.rs"),
@@ -242,9 +251,9 @@ mod tests {
 
     #[test]
     fn command_to_request_read_file() {
-        use std::path::PathBuf;
         use crate::cli::{Command, ReadCommand};
         use crate::protocol::Request;
+        use std::path::PathBuf;
 
         let cmd = Command::Read(ReadCommand::File {
             path: PathBuf::from("main.rs"),
@@ -253,7 +262,14 @@ mod tests {
             max_lines: None,
         });
         let req = command_to_request(&cmd);
-        assert!(matches!(req, Request::ReadFile { from: Some(1), to: Some(10), .. }));
+        assert!(matches!(
+            req,
+            Request::ReadFile {
+                from: Some(1),
+                to: Some(10),
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -269,16 +285,21 @@ mod tests {
             has_body: false,
         });
         let req = command_to_request(&cmd);
-        assert!(
-            matches!(req, Request::ReadSymbol { signature_only: true, max_lines: Some(20), .. })
-        );
+        assert!(matches!(
+            req,
+            Request::ReadSymbol {
+                signature_only: true,
+                max_lines: Some(20),
+                ..
+            }
+        ));
     }
 
     #[tokio::test]
     async fn handle_connection_rejects_oversized_frame() {
+        use crate::daemon::server::run_server;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use tokio::net::UnixStream;
-        use crate::daemon::server::run_server;
 
         let dir = tempfile::tempdir().unwrap();
         let sock = dir.path().join("test.sock");
@@ -300,7 +321,10 @@ mod tests {
 
         // The connection should be closed by the server (we won't get a valid response)
         let result = stream.read_u32().await;
-        assert!(result.is_err(), "server should close connection on oversized frame");
+        assert!(
+            result.is_err(),
+            "server should close connection on oversized frame"
+        );
 
         // Clean up
         if let Ok(mut client) = DaemonClient::connect(&sock).await {

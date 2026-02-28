@@ -73,12 +73,19 @@ pub fn format(response: &Response) -> String {
 
     // Server restart: {"restarted": lang, "server_name": name}
     if let Some(lang) = data.get("restarted").and_then(Value::as_str) {
-        let server = data.get("server_name").and_then(Value::as_str).unwrap_or("?");
+        let server = data
+            .get("server_name")
+            .and_then(Value::as_str)
+            .unwrap_or("?");
         return format!("restarted {lang} ({server})");
     }
 
     // Server clean: {"cleaned": true, ...}
-    if data.get("cleaned").and_then(Value::as_bool).unwrap_or(false) {
+    if data
+        .get("cleaned")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
         let bytes = data.get("bytes_freed").and_then(Value::as_u64).unwrap_or(0);
         if bytes == 0 {
             return "nothing to clean".to_string();
@@ -101,7 +108,10 @@ pub fn format(response: &Response) -> String {
 
     // Edit insert: has "inserted_at" + "operation" keys
     if data.get("inserted_at").is_some() {
-        let kind = data.get("operation").and_then(|v| v.as_str()).unwrap_or("after");
+        let kind = data
+            .get("operation")
+            .and_then(|v| v.as_str())
+            .unwrap_or("after");
         return crate::commands::edit::format_insert(data, kind);
     }
 
@@ -178,15 +188,9 @@ fn format_init(data: &Value) -> String {
         .get("symbols_total")
         .and_then(Value::as_u64)
         .unwrap_or(0);
-    let total = data
-        .get("files_total")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
+    let total = data.get("files_total").and_then(Value::as_u64).unwrap_or(0);
 
-    let elapsed = data
-        .get("elapsed_ms")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
+    let elapsed = data.get("elapsed_ms").and_then(Value::as_u64).unwrap_or(0);
     let time_str = if elapsed >= 1000 {
         format!(" in {}.{}s", elapsed / 1000, (elapsed % 1000) / 100)
     } else if elapsed > 0 {
@@ -272,7 +276,10 @@ fn format_status(data: &Value) -> String {
             .and_then(Value::as_u64)
             .unwrap_or(0);
         if discovered > 0 {
-            let _ = write!(out, "\nworkspaces: {discovered} discovered, {attached} attached");
+            let _ = write!(
+                out,
+                "\nworkspaces: {discovered} discovered, {attached} attached"
+            );
         }
 
         if let Some(langs) = project.get("languages").and_then(|v| v.as_array()) {
@@ -308,10 +315,7 @@ fn format_lsp_status(lsp: &Value, _data: &Value, out: &mut String) {
     let progress = lsp.get("progress").and_then(|v| v.as_str()).unwrap_or("");
 
     if let Some(servers) = lsp.get("servers").and_then(|v| v.as_array()) {
-        let sessions = lsp
-            .get("sessions")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
+        let sessions = lsp.get("sessions").and_then(Value::as_u64).unwrap_or(0);
         let status_tag = if lsp_status != "ready" && !progress.is_empty() {
             format!(" [{lsp_status} {progress}]")
         } else {
@@ -323,7 +327,10 @@ fn format_lsp_status(lsp: &Value, _data: &Value, out: &mut String) {
             let lang = s.get("language").and_then(|v| v.as_str()).unwrap_or("?");
             let server = s.get("server").and_then(|v| v.as_str()).unwrap_or("?");
             let s_status = s.get("status").and_then(|v| v.as_str()).unwrap_or("?");
-            let attached = s.get("attached_folders").and_then(Value::as_u64).unwrap_or(0);
+            let attached = s
+                .get("attached_folders")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
             let total = s.get("total_folders").and_then(Value::as_u64).unwrap_or(0);
             let state_tag = if s_status == "ready" {
                 String::new()
@@ -372,8 +379,15 @@ fn format_enriched_refs(items: &[Value], out: &mut String) {
     for item in items {
         let path = item.get("path").and_then(Value::as_str).unwrap_or("?");
         let line = item.get("line").and_then(Value::as_u64).unwrap_or(0);
-        let preview = item.get("preview").and_then(Value::as_str).unwrap_or("").trim();
-        let is_def = item.get("is_definition").and_then(Value::as_bool).unwrap_or(false);
+        let preview = item
+            .get("preview")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .trim();
+        let is_def = item
+            .get("is_definition")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
 
         if is_def {
             let _ = writeln!(out, "{path}:{line}  [definition]  {preview}");
@@ -441,10 +455,16 @@ fn format_check(data: &Value, diags: &[Value]) -> String {
 
     let mut parts: Vec<String> = vec![];
     if errors > 0 {
-        parts.push(format!("{errors} error{}", if errors == 1 { "" } else { "s" }));
+        parts.push(format!(
+            "{errors} error{}",
+            if errors == 1 { "" } else { "s" }
+        ));
     }
     if warnings > 0 {
-        parts.push(format!("{warnings} warning{}", if warnings == 1 { "" } else { "s" }));
+        parts.push(format!(
+            "{warnings} warning{}",
+            if warnings == 1 { "" } else { "s" }
+        ));
     }
     if !parts.is_empty() {
         let joined = parts.join(", ");
@@ -458,7 +478,11 @@ fn format_check(data: &Value, diags: &[Value]) -> String {
 }
 
 fn format_hover(data: &Value) -> String {
-    let content = data.get("hover_content").and_then(Value::as_str).unwrap_or("").trim();
+    let content = data
+        .get("hover_content")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
     let path = data.get("path").and_then(Value::as_str).unwrap_or("?");
     let line = data.get("line").and_then(Value::as_u64).unwrap_or(0);
 
@@ -471,7 +495,10 @@ fn format_hover(data: &Value) -> String {
 
 fn format_format(data: &Value) -> String {
     let path = data.get("path").and_then(Value::as_str).unwrap_or("?");
-    let n = data.get("edits_applied").and_then(Value::as_u64).unwrap_or(0);
+    let n = data
+        .get("edits_applied")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     if n == 0 {
         format!("No changes needed ({path})")
     } else {
@@ -480,8 +507,14 @@ fn format_format(data: &Value) -> String {
 }
 
 fn format_rename(data: &Value) -> String {
-    let files = data.get("files_changed").and_then(Value::as_u64).unwrap_or(0);
-    let refs = data.get("refs_changed").and_then(Value::as_u64).unwrap_or(0);
+    let files = data
+        .get("files_changed")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let refs = data
+        .get("refs_changed")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     if files == 0 {
         "No references renamed".to_string()
     } else {
@@ -490,7 +523,10 @@ fn format_rename(data: &Value) -> String {
 }
 
 fn format_fix(data: &Value) -> String {
-    let n = data.get("fixes_applied").and_then(Value::as_u64).unwrap_or(0);
+    let n = data
+        .get("fixes_applied")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     if n == 0 {
         return "No fixes available".to_string();
     }
@@ -617,7 +653,10 @@ fn format_daemon_server_status(servers: &[Value]) -> String {
         let lang = s.get("language").and_then(Value::as_str).unwrap_or("?");
         let server = s.get("server").and_then(Value::as_str).unwrap_or("?");
         let status = s.get("status").and_then(Value::as_str).unwrap_or("?");
-        let attached = s.get("attached_folders").and_then(Value::as_u64).unwrap_or(0);
+        let attached = s
+            .get("attached_folders")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
         let total = s.get("total_folders").and_then(Value::as_u64).unwrap_or(0);
         let uptime = s.get("uptime_secs").and_then(Value::as_u64).unwrap_or(0);
         let uptime_str = if uptime > 0 {

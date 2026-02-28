@@ -1,10 +1,10 @@
 use std::path::Path;
 
 use anyhow::Context;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::commands::find::resolve_symbol_location;
-use crate::lsp::client::{LspClient, path_to_uri};
+use crate::lsp::client::{path_to_uri, LspClient};
 use crate::lsp::files::FileTracker;
 
 /// Fetch hover information for a named symbol.
@@ -20,8 +20,7 @@ pub async fn handle_hover(
     file_tracker: &mut FileTracker,
     project_root: &Path,
 ) -> anyhow::Result<Value> {
-    let (abs_path, line, character) =
-        resolve_symbol_location(name, client, project_root).await?;
+    let (abs_path, line, character) = resolve_symbol_location(name, client, project_root).await?;
 
     file_tracker
         .ensure_open(&abs_path, client.transport_mut())

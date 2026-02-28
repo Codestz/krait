@@ -63,8 +63,5 @@ fn krait_edit_subcommands_in_help() {
 
 #[test]
 fn krait_unknown_command_fails() {
-    krait()
-        .arg("nonexistent")
-        .assert()
-        .failure();
+    krait().arg("nonexistent").assert().failure();
 }

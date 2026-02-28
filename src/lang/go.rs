@@ -16,7 +16,10 @@ mod tests {
 
     #[test]
     fn strips_pointer_receiver() {
-        assert_eq!(base_name("(*knowledgeService).CreateKnowledgeFromFile"), "CreateKnowledgeFromFile");
+        assert_eq!(
+            base_name("(*knowledgeService).CreateKnowledgeFromFile"),
+            "CreateKnowledgeFromFile"
+        );
     }
 
     #[test]

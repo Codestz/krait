@@ -3,14 +3,14 @@ use std::sync::Arc;
 use std::thread;
 
 use anyhow::Context;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tracing::{debug, info, warn};
 
 use super::hasher::hash_files_parallel;
 use super::store::{CachedSymbol, IndexStore};
 use crate::commands::find::symbol_kind_name;
 use crate::detect::Language;
-use crate::lsp::client::{LspClient, path_to_uri};
+use crate::lsp::client::{path_to_uri, LspClient};
 use crate::lsp::files::FileTracker;
 use crate::lsp::install;
 
@@ -62,9 +62,7 @@ pub fn plan_index(
 
     // Batch SELECT all stored hashes in one query
     let rel_paths: Vec<&str> = path_hashes.iter().map(|(r, _, _)| r.as_str()).collect();
-    let stored = store
-        .get_file_hashes_batch(&rel_paths)
-        .unwrap_or_default();
+    let stored = store.get_file_hashes_batch(&rel_paths).unwrap_or_default();
 
     let mut to_index = Vec::new();
     let mut cached = 0usize;
@@ -73,7 +71,11 @@ pub fn plan_index(
         if stored.get(&rel_path).is_some_and(|h| *h == hash) {
             cached += 1;
         } else {
-            to_index.push(FileEntry { abs_path, rel_path, hash });
+            to_index.push(FileEntry {
+                abs_path,
+                rel_path,
+                hash,
+            });
         }
     }
 
@@ -160,7 +162,10 @@ pub async fn collect_symbols_parallel(
     }
 
     let actual_workers = workers.len();
-    info!("init: {actual_workers} workers booted in {:?}", boot_start.elapsed());
+    info!(
+        "init: {actual_workers} workers booted in {:?}",
+        boot_start.elapsed()
+    );
 
     // Split files round-robin across workers
     let files = Arc::new(files);
@@ -212,7 +217,8 @@ async fn collect_with_single_worker(
     batch_size: usize,
 ) -> anyhow::Result<Vec<(String, String, Vec<CachedSymbol>)>> {
     let (binary_path, entry) = install::ensure_server(lang).await?;
-    let (mut client, mut tracker) = boot_temp_worker(&binary_path, entry.args, lang, workspace_root).await?;
+    let (mut client, mut tracker) =
+        boot_temp_worker(&binary_path, entry.args, lang, workspace_root).await?;
 
     let file_refs: Vec<&FileEntry> = files.iter().collect();
     let results = collect_symbols(&file_refs, &mut client, &mut tracker, batch_size).await;

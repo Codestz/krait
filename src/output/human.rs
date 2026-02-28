@@ -19,7 +19,10 @@ pub fn format(response: &Response) -> String {
 
     // Status response
     if let Some(daemon) = data.get("daemon") {
-        let pid = daemon.get("pid").and_then(serde_json::Value::as_u64).unwrap_or(0);
+        let pid = daemon
+            .get("pid")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
         let uptime = daemon
             .get("uptime_secs")
             .and_then(serde_json::Value::as_u64)
@@ -62,11 +65,19 @@ fn format_duration_human(secs: u64) -> String {
         format!("{secs} seconds")
     } else if secs < 3600 {
         let m = secs / 60;
-        if m == 1 { "1 minute".into() } else { format!("{m} minutes") }
+        if m == 1 {
+            "1 minute".into()
+        } else {
+            format!("{m} minutes")
+        }
     } else {
         let h = secs / 3600;
         let m = (secs % 3600) / 60;
-        let h_str = if h == 1 { "1 hour".into() } else { format!("{h} hours") };
+        let h_str = if h == 1 {
+            "1 hour".into()
+        } else {
+            format!("{h} hours")
+        };
         if m == 0 {
             h_str
         } else {

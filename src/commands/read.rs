@@ -1,8 +1,8 @@
 use std::fmt::Write;
 use std::path::Path;
 
-use anyhow::{Context, bail};
-use serde_json::{Value, json};
+use anyhow::{bail, Context};
+use serde_json::{json, Value};
 
 use super::DEFAULT_MAX_LINES;
 
@@ -39,8 +39,8 @@ pub fn handle_read_file(
     }
 
     // Binary detection: scan first 8KB for null bytes
-    let raw = std::fs::read(&abs_path)
-        .with_context(|| format!("failed to read: {}", path.display()))?;
+    let raw =
+        std::fs::read(&abs_path).with_context(|| format!("failed to read: {}", path.display()))?;
 
     let scan_len = raw.len().min(BINARY_SCAN_SIZE);
     if raw[..scan_len].contains(&0) {
@@ -151,16 +151,23 @@ pub async fn handle_read_symbol(
         let abs = project_root.join(&sym.path);
         // Convert 1-indexed candidate line to 0-indexed hint for overload disambiguation
         let hint_line = sym.line.checked_sub(1);
-        let loc = match resolve_symbol_range(lookup_name, &abs, hint_line, client, file_tracker).await {
-            Ok(loc) => loc,
-            Err(e) => { last_err = Some(e); continue; }
-        };
+        let loc =
+            match resolve_symbol_range(lookup_name, &abs, hint_line, client, file_tracker).await {
+                Ok(loc) => loc,
+                Err(e) => {
+                    last_err = Some(e);
+                    continue;
+                }
+            };
 
         // For dotted names (e.g. "Config.new"), resolve the nested part
         let location = if name.contains('.') {
             match resolve_symbol_range(name, &abs, hint_line, client, file_tracker).await {
                 Ok(l) => l,
-                Err(e) => { last_err = Some(e); continue; }
+                Err(e) => {
+                    last_err = Some(e);
+                    continue;
+                }
             }
         } else {
             loc
@@ -170,7 +177,8 @@ pub async fn handle_read_symbol(
         let content = match std::fs::read_to_string(&abs) {
             Ok(c) => c,
             Err(e) => {
-                last_err = Some(anyhow::Error::from(e).context(format!("failed to read: {}", sym.path)));
+                last_err =
+                    Some(anyhow::Error::from(e).context(format!("failed to read: {}", sym.path)));
                 continue;
             }
         };
@@ -198,7 +206,11 @@ pub async fn handle_read_symbol(
 
         let max = max_lines.unwrap_or(DEFAULT_MAX_LINES) as usize;
         let truncated = display_lines.len() > max;
-        let display_lines = if truncated { &display_lines[..max] } else { display_lines };
+        let display_lines = if truncated {
+            &display_lines[..max]
+        } else {
+            display_lines
+        };
 
         let numbered = format_numbered_lines(display_lines, start + 1);
         let display_from = start + 1;
@@ -229,11 +241,9 @@ pub async fn handle_read_symbol(
         return Ok(fallback);
     }
 
-    Err(last_err.unwrap_or_else(|| {
-        anyhow::anyhow!("symbol '{name}' not found in document symbols")
-    }))
+    Err(last_err
+        .unwrap_or_else(|| anyhow::anyhow!("symbol '{name}' not found in document symbols")))
 }
-
 
 /// Format lines with `cat -n` style numbering.
 pub(crate) fn format_numbered_lines(lines: &[&str], start_num: usize) -> String {
@@ -269,14 +279,7 @@ mod tests {
         let file = dir.path().join("test.txt");
         std::fs::write(&file, "line1\nline2\nline3\nline4\nline5\n").unwrap();
 
-        let result = handle_read_file(
-            Path::new("test.txt"),
-            None,
-            None,
-            None,
-            dir.path(),
-        )
-        .unwrap();
+        let result = handle_read_file(Path::new("test.txt"), None, None, None, dir.path()).unwrap();
 
         assert_eq!(result["total"], 5);
         assert_eq!(result["from"], 1);
@@ -291,14 +294,8 @@ mod tests {
         let file = dir.path().join("test.txt");
         std::fs::write(&file, "a\nb\nc\nd\ne\n").unwrap();
 
-        let result = handle_read_file(
-            Path::new("test.txt"),
-            Some(2),
-            Some(4),
-            None,
-            dir.path(),
-        )
-        .unwrap();
+        let result =
+            handle_read_file(Path::new("test.txt"), Some(2), Some(4), None, dir.path()).unwrap();
 
         assert_eq!(result["from"], 2);
         assert_eq!(result["to"], 4);
@@ -322,14 +319,8 @@ mod tests {
         }
         std::fs::write(&file, content).unwrap();
 
-        let result = handle_read_file(
-            Path::new("test.txt"),
-            None,
-            None,
-            Some(3),
-            dir.path(),
-        )
-        .unwrap();
+        let result =
+            handle_read_file(Path::new("test.txt"), None, None, Some(3), dir.path()).unwrap();
 
         assert_eq!(result["truncated"], true);
         assert_eq!(result["to"], 3);
@@ -338,13 +329,7 @@ mod tests {
     #[test]
     fn read_file_not_found() {
         let dir = tempfile::tempdir().unwrap();
-        let result = handle_read_file(
-            Path::new("nonexistent.txt"),
-            None,
-            None,
-            None,
-            dir.path(),
-        );
+        let result = handle_read_file(Path::new("nonexistent.txt"), None, None, None, dir.path());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
     }
@@ -371,13 +356,7 @@ mod tests {
         let file = dir.path().join("test.txt");
         std::fs::write(&file, "one\ntwo\n").unwrap();
 
-        let result = handle_read_file(
-            Path::new("test.txt"),
-            Some(100),
-            None,
-            None,
-            dir.path(),
-        );
+        let result = handle_read_file(Path::new("test.txt"), Some(100), None, None, dir.path());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("past end"));
     }

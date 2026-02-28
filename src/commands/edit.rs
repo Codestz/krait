@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, bail};
-use serde_json::{Value, json};
+use anyhow::{bail, Context};
+use serde_json::{json, Value};
 
-use crate::commands::find::{SymbolMatch, find_symbol};
+use crate::commands::find::{find_symbol, SymbolMatch};
 use crate::index::watcher::DirtyFiles;
 use crate::lsp::client::LspClient;
 use crate::lsp::files::FileTracker;
-use crate::lsp::symbols::{SymbolLocation, resolve_symbol_range};
+use crate::lsp::symbols::{resolve_symbol_range, SymbolLocation};
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -22,8 +22,7 @@ async fn locate_symbol(
 ) -> anyhow::Result<(PathBuf, SymbolLocation)> {
     let search_name = name.split('.').next().unwrap_or(name);
 
-    let candidates: Vec<SymbolMatch> =
-        find_symbol(search_name, client, project_root).await?;
+    let candidates: Vec<SymbolMatch> = find_symbol(search_name, client, project_root).await?;
 
     if candidates.is_empty() {
         bail!("symbol '{name}' not found");
@@ -165,7 +164,10 @@ pub async fn handle_edit_insert_after(
     let insert_count = new_lines.len();
 
     if needs_blank {
-        lines.splice(insert_at..insert_at, std::iter::once("").chain(new_lines.iter().copied()));
+        lines.splice(
+            insert_at..insert_at,
+            std::iter::once("").chain(new_lines.iter().copied()),
+        );
     } else {
         lines.splice(insert_at..insert_at, new_lines.iter().copied());
     }
@@ -221,7 +223,11 @@ pub async fn handle_edit_insert_before(
     let insert_count = new_lines.len();
 
     // Insert code + blank separator before the target line
-    let with_sep: Vec<&str> = new_lines.iter().copied().chain(std::iter::once("")).collect();
+    let with_sep: Vec<&str> = new_lines
+        .iter()
+        .copied()
+        .chain(std::iter::once(""))
+        .collect();
     lines.splice(insert_at..insert_at, with_sep.iter().copied());
 
     let new_content = ensure_trailing_newline(&lines.join("\n"));
@@ -335,7 +341,7 @@ mod tests {
     #[test]
     fn find_insert_before_skips_attributes() {
         let lines = vec![
-            "fn unrelated() {}",  // 0
+            "fn unrelated() {}",   // 0
             "",                    // 1
             "#[derive(Debug)]",    // 2
             "#[allow(dead_code)]", // 3

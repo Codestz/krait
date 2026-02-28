@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::Context;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::lang::go as lang_go;
 use crate::lsp::client::{self, LspClient};
@@ -83,9 +83,9 @@ pub async fn resolve_symbol_location(
 /// Searches for word-boundary occurrences of `name` and filters to lines that look
 /// like definition sites (the word immediately before the name is a definition keyword).
 /// Returns results in the same `SymbolMatch` format so the formatter is unchanged.
-#[must_use] 
+#[must_use]
 pub fn text_search_find_symbol(name: &str, project_root: &Path) -> Vec<SymbolMatch> {
-    use crate::commands::search::{SearchOptions, run as search_run};
+    use crate::commands::search::{run as search_run, SearchOptions};
 
     let opts = SearchOptions {
         pattern: name.to_string(),
@@ -122,9 +122,9 @@ pub fn text_search_find_symbol(name: &str, project_root: &Path) -> Vec<SymbolMat
 ///
 /// Returns all word-boundary occurrences of `name` as `ReferenceMatch` values, with
 /// `is_definition` set for lines that look like definition sites.
-#[must_use] 
+#[must_use]
 pub fn text_search_find_refs(name: &str, project_root: &Path) -> Vec<ReferenceMatch> {
-    use crate::commands::search::{SearchOptions, run as search_run};
+    use crate::commands::search::{run as search_run, SearchOptions};
 
     let opts = SearchOptions {
         pattern: name.to_string(),
@@ -147,7 +147,13 @@ pub fn text_search_find_refs(name: &str, project_root: &Path) -> Vec<ReferenceMa
         .into_iter()
         .map(|m| {
             let is_definition = classify_definition(&m.preview, name).is_some();
-            ReferenceMatch { path: m.path, line: m.line, preview: m.preview, is_definition, containing_symbol: None }
+            ReferenceMatch {
+                path: m.path,
+                line: m.line,
+                preview: m.preview,
+                is_definition,
+                containing_symbol: None,
+            }
         })
         .collect();
 
@@ -266,7 +272,7 @@ pub struct ReferenceMatch {
 
 /// Walk a `SymbolEntry` tree and return the innermost symbol whose range
 /// contains `line` (1-indexed). Used to enrich references with caller info.
-#[must_use] 
+#[must_use]
 pub fn find_innermost_containing(
     symbols: &[crate::commands::list::SymbolEntry],
     line: u32,
@@ -296,10 +302,7 @@ fn parse_symbol_results(response: &Value, query: &str, project_root: &Path) -> V
 
     let mut results = Vec::new();
     for item in items {
-        let name = item
-            .get("name")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let name = item.get("name").and_then(Value::as_str).unwrap_or_default();
 
         // Filter to exact or prefix matches.
         // Go struct methods are indexed with receiver prefix: "(*ReceiverType).MethodName".
@@ -330,8 +333,16 @@ fn parse_symbol_results(response: &Value, query: &str, project_root: &Path) -> V
 
 /// Artifact and generated-file directories to exclude from reference results.
 const EXCLUDED_DIRS: &[&str] = &[
-    "target/", ".git/", "node_modules/", ".mypy_cache/", "__pycache__/",
-    ".cache/", "dist/", "build/", ".next/", ".nuxt/",
+    "target/",
+    ".git/",
+    "node_modules/",
+    ".mypy_cache/",
+    "__pycache__/",
+    ".cache/",
+    "dist/",
+    "build/",
+    ".next/",
+    ".nuxt/",
 ];
 
 fn parse_reference_results(
@@ -346,10 +357,7 @@ fn parse_reference_results(
 
     let mut results = Vec::new();
     for loc in locations {
-        let uri = loc
-            .get("uri")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let uri = loc.get("uri").and_then(Value::as_str).unwrap_or_default();
 
         #[allow(clippy::cast_possible_truncation)]
         let line = loc
@@ -361,7 +369,10 @@ fn parse_reference_results(
         let path = uri_to_relative_path(uri, project_root);
 
         // Skip build artifacts and generated files
-        if EXCLUDED_DIRS.iter().any(|dir| path.starts_with(dir) || path.contains(&format!("/{dir}"))) {
+        if EXCLUDED_DIRS
+            .iter()
+            .any(|dir| path.starts_with(dir) || path.contains(&format!("/{dir}")))
+        {
             continue;
         }
 
@@ -459,7 +470,7 @@ fn read_line_preview(path: &Path, line: u32) -> String {
 /// Uses brace counting for functions/classes/objects. For single-line
 /// statements (const arrow functions, type aliases, etc.) stops at `;`.
 /// Caps at 200 lines to avoid returning entire files.
-#[must_use] 
+#[must_use]
 pub fn extract_symbol_body(path: &Path, start_line: u32) -> Option<String> {
     let content = std::fs::read_to_string(path).ok()?;
     let lines: Vec<&str> = content.lines().collect();
@@ -476,8 +487,13 @@ pub fn extract_symbol_body(path: &Path, start_line: u32) -> Option<String> {
         let idx = start + i;
         for ch in line.chars() {
             match ch {
-                '{' => { depth += 1; found_open = true; }
-                '}' => { depth -= 1; }
+                '{' => {
+                    depth += 1;
+                    found_open = true;
+                }
+                '}' => {
+                    depth -= 1;
+                }
                 _ => {}
             }
         }
@@ -738,22 +754,55 @@ mod tests {
 
     #[test]
     fn classify_definition_recognises_const() {
-        assert_eq!(classify_definition("export const createPromotionsStep = createStep(", "createPromotionsStep"), Some("constant"));
-        assert_eq!(classify_definition("const foo = 1;", "foo"), Some("constant"));
+        assert_eq!(
+            classify_definition(
+                "export const createPromotionsStep = createStep(",
+                "createPromotionsStep"
+            ),
+            Some("constant")
+        );
+        assert_eq!(
+            classify_definition("const foo = 1;", "foo"),
+            Some("constant")
+        );
     }
 
     #[test]
     fn classify_definition_recognises_function() {
-        assert_eq!(classify_definition("function greet(name: string) {", "greet"), Some("function"));
-        assert_eq!(classify_definition("export function handleRequest(req) {", "handleRequest"), Some("function"));
-        assert_eq!(classify_definition("pub fn run() -> Result<()> {", "run"), Some("function"));
+        assert_eq!(
+            classify_definition("function greet(name: string) {", "greet"),
+            Some("function")
+        );
+        assert_eq!(
+            classify_definition("export function handleRequest(req) {", "handleRequest"),
+            Some("function")
+        );
+        assert_eq!(
+            classify_definition("pub fn run() -> Result<()> {", "run"),
+            Some("function")
+        );
     }
 
     #[test]
     fn classify_definition_rejects_call_sites() {
-        assert_eq!(classify_definition("const result = createPromotionsStep(data)", "createPromotionsStep"), None);
-        assert_eq!(classify_definition("import { createPromotionsStep } from '../steps'", "createPromotionsStep"), None);
-        assert_eq!(classify_definition("return createPromotionsStep(data)", "createPromotionsStep"), None);
+        assert_eq!(
+            classify_definition(
+                "const result = createPromotionsStep(data)",
+                "createPromotionsStep"
+            ),
+            None
+        );
+        assert_eq!(
+            classify_definition(
+                "import { createPromotionsStep } from '../steps'",
+                "createPromotionsStep"
+            ),
+            None
+        );
+        assert_eq!(
+            classify_definition("return createPromotionsStep(data)", "createPromotionsStep"),
+            None
+        );
     }
 
     #[test]
@@ -765,7 +814,8 @@ mod tests {
         fs::write(
             dir.path().join("step.ts"),
             "export const createPromotionsStep = createStep(\n  stepId,\n  async () => {}\n);\n",
-        ).unwrap();
+        )
+        .unwrap();
         fs::write(
             dir.path().join("workflow.ts"),
             "import { createPromotionsStep } from './step';\nconst result = createPromotionsStep(data);\n",
@@ -788,7 +838,8 @@ mod tests {
         fs::write(
             dir.path().join("step.ts"),
             "export const createPromotionsStep = createStep(stepId, async () => {});\n",
-        ).unwrap();
+        )
+        .unwrap();
         fs::write(
             dir.path().join("workflow.ts"),
             "import { createPromotionsStep } from './step';\nconst out = createPromotionsStep(data);\n",
@@ -802,13 +853,34 @@ mod tests {
 
     #[test]
     fn classify_definition_detects_kinds() {
-        assert_eq!(classify_definition("export class MyClass {", "MyClass"), Some("class"));
-        assert_eq!(classify_definition("export function doThing() {", "doThing"), Some("function"));
-        assert_eq!(classify_definition("pub fn run() -> Result<()> {", "run"), Some("function"));
-        assert_eq!(classify_definition("export const MY_CONST = 42", "MY_CONST"), Some("constant"));
-        assert_eq!(classify_definition("export interface IService {", "IService"), Some("interface"));
-        assert_eq!(classify_definition("pub struct Config {", "Config"), Some("struct"));
-        assert_eq!(classify_definition("type MyAlias = string;", "MyAlias"), Some("type_alias"));
+        assert_eq!(
+            classify_definition("export class MyClass {", "MyClass"),
+            Some("class")
+        );
+        assert_eq!(
+            classify_definition("export function doThing() {", "doThing"),
+            Some("function")
+        );
+        assert_eq!(
+            classify_definition("pub fn run() -> Result<()> {", "run"),
+            Some("function")
+        );
+        assert_eq!(
+            classify_definition("export const MY_CONST = 42", "MY_CONST"),
+            Some("constant")
+        );
+        assert_eq!(
+            classify_definition("export interface IService {", "IService"),
+            Some("interface")
+        );
+        assert_eq!(
+            classify_definition("pub struct Config {", "Config"),
+            Some("struct")
+        );
+        assert_eq!(
+            classify_definition("type MyAlias = string;", "MyAlias"),
+            Some("type_alias")
+        );
     }
 
     #[test]
@@ -817,7 +889,12 @@ mod tests {
         use crate::client::command_to_request;
         use crate::protocol::Request;
 
-        let cmd = Command::Find(FindCommand::Symbol { name: "MyStruct".into(), path: None, src_only: false, include_body: false });
+        let cmd = Command::Find(FindCommand::Symbol {
+            name: "MyStruct".into(),
+            path: None,
+            src_only: false,
+            include_body: false,
+        });
         let req = command_to_request(&cmd);
         assert!(matches!(req, Request::FindSymbol { name, .. } if name == "MyStruct"));
     }
@@ -828,7 +905,10 @@ mod tests {
         use crate::client::command_to_request;
         use crate::protocol::Request;
 
-        let cmd = Command::Find(FindCommand::Refs { name: "my_func".into(), with_symbol: false });
+        let cmd = Command::Find(FindCommand::Refs {
+            name: "my_func".into(),
+            with_symbol: false,
+        });
         let req = command_to_request(&cmd);
         assert!(matches!(req, Request::FindRefs { name, .. } if name == "my_func"));
     }

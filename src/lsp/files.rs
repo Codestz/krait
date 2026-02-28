@@ -77,8 +77,7 @@ impl FileTracker {
         content: &str,
         transport: &mut LspTransport,
     ) -> anyhow::Result<()> {
-        let canonical = std::fs::canonicalize(path)
-            .unwrap_or_else(|_| path.to_path_buf());
+        let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
 
         if self.open_files.contains(&canonical) {
             return Ok(());
@@ -137,11 +136,7 @@ impl FileTracker {
     ///
     /// # Errors
     /// Returns an error if the notification fails.
-    pub async fn close(
-        &mut self,
-        path: &Path,
-        transport: &mut LspTransport,
-    ) -> anyhow::Result<()> {
+    pub async fn close(&mut self, path: &Path, transport: &mut LspTransport) -> anyhow::Result<()> {
         let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
 
         if !self.open_files.remove(&canonical) {

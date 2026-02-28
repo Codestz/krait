@@ -19,7 +19,11 @@ mod tests {
 
     #[test]
     fn implementation_has_brace() {
-        assert!(!is_overload_stub(&["function foo(x: number): string {", "  return x.toString();", "}"]));
+        assert!(!is_overload_stub(&[
+            "function foo(x: number): string {",
+            "  return x.toString();",
+            "}"
+        ]));
     }
 
     #[test]

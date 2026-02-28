@@ -5,9 +5,11 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use crate::commands::{DEFAULT_MAX_LINES, find::SymbolMatch, list::SymbolEntry, read::format_numbered_lines};
+use crate::commands::{
+    find::SymbolMatch, list::SymbolEntry, read::format_numbered_lines, DEFAULT_MAX_LINES,
+};
 use crate::index::hasher;
 use crate::index::store::{CachedSymbol, IndexStore};
 use crate::index::watcher::DirtyFiles;
@@ -109,10 +111,8 @@ pub fn cached_find_symbol(
 /// children, etc.).
 fn build_hierarchy(symbols: &[CachedSymbol], max_depth: u8) -> Vec<SymbolEntry> {
     // Top-level symbols: no parent
-    let top_level: Vec<&CachedSymbol> = symbols
-        .iter()
-        .filter(|s| s.parent_name.is_none())
-        .collect();
+    let top_level: Vec<&CachedSymbol> =
+        symbols.iter().filter(|s| s.parent_name.is_none()).collect();
 
     top_level
         .into_iter()
@@ -463,7 +463,10 @@ mod tests {
         assert_eq!(result["kind"], "struct");
         assert_eq!(result["from"], 2);
         assert_eq!(result["truncated"], false);
-        assert!(result["content"].as_str().unwrap().contains("struct Config"));
+        assert!(result["content"]
+            .as_str()
+            .unwrap()
+            .contains("struct Config"));
     }
 
     #[test]
@@ -478,7 +481,8 @@ mod tests {
     #[test]
     fn read_symbol_dotted_name() {
         let (store, dir) = make_store_with_symbols();
-        let result = cached_read_symbol(&store, "Config.new", false, None, dir.path(), None).unwrap();
+        let result =
+            cached_read_symbol(&store, "Config.new", false, None, dir.path(), None).unwrap();
         assert_eq!(result["symbol"], "new");
         assert_eq!(result["kind"], "function");
         assert!(result["content"].as_str().unwrap().contains("fn new"));
@@ -508,7 +512,8 @@ mod tests {
     #[test]
     fn read_symbol_max_lines() {
         let (store, dir) = make_store_with_symbols();
-        let result = cached_read_symbol(&store, "Config", false, Some(2), dir.path(), None).unwrap();
+        let result =
+            cached_read_symbol(&store, "Config", false, Some(2), dir.path(), None).unwrap();
         assert_eq!(result["truncated"], true);
         assert_eq!(result["to"], 3);
     }

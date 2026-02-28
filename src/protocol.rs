@@ -174,9 +174,7 @@ pub enum FrameError {
 pub fn encode_frame<T: Serialize>(value: &T) -> Result<Vec<u8>, FrameError> {
     let json = serde_json::to_vec(value)?;
 
-    let len = u32::try_from(json.len()).map_err(|_| FrameError::Oversized {
-        size: u32::MAX,
-    })?;
+    let len = u32::try_from(json.len()).map_err(|_| FrameError::Oversized { size: u32::MAX })?;
 
     if len > MAX_FRAME_SIZE {
         return Err(FrameError::Oversized { size: len });
@@ -233,7 +231,10 @@ mod tests {
             Request::Status,
             Request::DaemonStop,
             Request::Init {},
-            Request::Check { path: None, errors_only: false },
+            Request::Check {
+                path: None,
+                errors_only: false,
+            },
             Request::Check {
                 path: Some(PathBuf::from("src/lib.rs")),
                 errors_only: true,
@@ -312,11 +313,7 @@ mod tests {
         let responses = vec![
             Response::ok(json!({"pid": 1234})),
             Response::err("not_found", "Symbol not found"),
-            Response::err_with_advice(
-                "lsp_not_found",
-                "LSP not detected",
-                "Install rust-analyzer",
-            ),
+            Response::err_with_advice("lsp_not_found", "LSP not detected", "Install rust-analyzer"),
             Response::not_implemented(),
         ];
 

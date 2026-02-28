@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::Context;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::lsp::client::LspClient;
 use crate::lsp::files::FileTracker;

@@ -7,8 +7,8 @@ use std::io::Read as _;
 use std::time::Duration;
 
 use krait::cli::{Cli, Command, DaemonCommand, EditCommand, OutputFormat, ServerCommand};
-use krait::commands;
 use krait::client::{self, DaemonClient};
+use krait::commands;
 use krait::daemon;
 use krait::detect;
 use krait::output;
@@ -137,8 +137,7 @@ async fn main() -> Result<()> {
                 max_matches: max.unwrap_or(200),
             };
             let search_output = commands::search::run(&opts, &project_root)?;
-            let formatted =
-                output::format_search(&search_output, format, *context > 0, *files);
+            let formatted = output::format_search(&search_output, format, *context > 0, *files);
             if search_output.matches.is_empty() && !*files {
                 eprintln!("no matches");
                 std::process::exit(1);
@@ -186,8 +185,11 @@ async fn handle_watch(
                 match daemon_client.send(&request).await {
                     Ok(response) => {
                         let formatted = output::format_response(&response, format);
-                        let msg =
-                            if formatted.is_empty() { "No diagnostics" } else { formatted.trim() };
+                        let msg = if formatted.is_empty() {
+                            "No diagnostics"
+                        } else {
+                            formatted.trim()
+                        };
                         println!("[{ts}] {msg}");
                     }
                     Err(e) => eprintln!("[{ts}] error: {e}"),

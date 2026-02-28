@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicI64, Ordering};
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
@@ -112,7 +112,10 @@ impl LspTransport {
     /// # Errors
     /// Returns an error if the kill signal fails.
     pub async fn kill(&mut self) -> anyhow::Result<()> {
-        self.child.kill().await.context("failed to kill LSP process")?;
+        self.child
+            .kill()
+            .await
+            .context("failed to kill LSP process")?;
         let _ = self.child.wait().await; // reap zombie
         Ok(())
     }
@@ -270,13 +273,18 @@ mod tests {
         let classified = classify_message(&msg).unwrap();
         assert!(matches!(
             classified,
-            JsonRpcMessage::Response { id: 2, error: Some(_), .. }
+            JsonRpcMessage::Response {
+                id: 2,
+                error: Some(_),
+                ..
+            }
         ));
     }
 
     #[test]
     fn classify_notification() {
-        let msg = json!({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {}});
+        let msg =
+            json!({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {}});
         let classified = classify_message(&msg).unwrap();
         assert!(
             matches!(classified, JsonRpcMessage::Notification { ref method, .. } if method == "textDocument/publishDiagnostics")
@@ -285,8 +293,7 @@ mod tests {
 
     #[test]
     fn classify_server_request() {
-        let msg =
-            json!({"jsonrpc": "2.0", "id": 5, "method": "window/workDoneProgress/create", "params": {}});
+        let msg = json!({"jsonrpc": "2.0", "id": 5, "method": "window/workDoneProgress/create", "params": {}});
         let classified = classify_message(&msg).unwrap();
         assert!(
             matches!(classified, JsonRpcMessage::ServerRequest { ref method, .. } if method == "window/workDoneProgress/create")

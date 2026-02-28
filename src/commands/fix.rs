@@ -1,10 +1,10 @@
 use std::path::Path;
 
 use anyhow::Context;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::commands::workspace_edit::apply_workspace_edit;
-use crate::lsp::client::{LspClient, path_to_uri};
+use crate::lsp::client::{path_to_uri, LspClient};
 use crate::lsp::diagnostics::{DiagSeverity, DiagnosticStore};
 use crate::lsp::files::FileTracker;
 
@@ -33,7 +33,10 @@ pub async fn handle_fix(
         } else {
             project_root.join(p)
         };
-        all_diags.into_iter().filter(|(fp, _)| *fp == abs).collect::<Vec<_>>()
+        all_diags
+            .into_iter()
+            .filter(|(fp, _)| *fp == abs)
+            .collect::<Vec<_>>()
     } else {
         all_diags
     };

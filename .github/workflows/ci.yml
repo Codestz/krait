@@ -43,14 +43,14 @@ jobs:
         run: cargo test
 
   msrv:
-    name: Minimum Supported Rust Version (1.75)
+    name: Minimum Supported Rust Version (1.85)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.75"
+          toolchain: "1.85"
 
       - uses: actions/cache@v5
         with:

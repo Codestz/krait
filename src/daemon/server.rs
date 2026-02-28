@@ -10,13 +10,13 @@ use tokio::sync::{watch, Mutex};
 use tracing::{debug, error, info};
 
 use crate::commands::{check, edit, find, fix, format as fmt, hover, list, read, rename};
-use crate::lsp::client::path_to_uri;
+use crate::config::{self, ConfigSource};
+use crate::detect::{self, language_for_file, Language};
 use crate::index::builder;
 use crate::index::cache_query;
 use crate::index::store::IndexStore;
 use crate::index::watcher::{self, DirtyFiles};
-use crate::config::{self, ConfigSource};
-use crate::detect::{self, Language, language_for_file};
+use crate::lsp::client::path_to_uri;
 use crate::lsp::diagnostics::DiagnosticStore;
 use crate::lsp::pool::LspMultiplexer;
 use crate::lsp::registry::{find_server, get_entry};
@@ -43,7 +43,12 @@ pub struct DaemonState {
     /// Whether the file watcher is running (determines BLAKE3 fallback behavior).
     pub watcher_active: bool,
     /// File watcher handle — kept alive by ownership; dropped on shutdown.
-    _watcher: Option<notify_debouncer_full::Debouncer<notify_debouncer_full::notify::RecommendedWatcher, notify_debouncer_full::FileIdMap>>,
+    _watcher: Option<
+        notify_debouncer_full::Debouncer<
+            notify_debouncer_full::notify::RecommendedWatcher,
+            notify_debouncer_full::FileIdMap,
+        >,
+    >,
     shutdown_tx: watch::Sender<bool>,
     /// LSP diagnostic store — fed by `textDocument/publishDiagnostics` notifications.
     pub diagnostic_store: Arc<DiagnosticStore>,
@@ -62,7 +67,10 @@ impl DaemonState {
         let dirty_files = DirtyFiles::new();
 
         let diagnostic_store = Arc::new(DiagnosticStore::new());
-        let pool = Arc::new(LspMultiplexer::new(project_root.clone(), package_roots.clone()));
+        let pool = Arc::new(LspMultiplexer::new(
+            project_root.clone(),
+            package_roots.clone(),
+        ));
         pool.set_diagnostic_store(Arc::clone(&diagnostic_store));
 
         // Start file watcher — clears stale diagnostics when files change on disk
@@ -175,19 +183,13 @@ pub async fn run_server(
 
     if package_roots.len() > 1 {
         if loaded.config.is_none() {
-            info!(
-                "monorepo detected: {} workspace roots",
-                package_roots.len()
-            );
+            info!("monorepo detected: {} workspace roots", package_roots.len());
         }
         for (lang, root) in &package_roots {
             debug!("  workspace: {lang}:{}", root.display());
         }
     } else if !package_roots.is_empty() {
-        info!(
-            "project: {} workspace root(s)",
-            package_roots.len()
-        );
+        info!("project: {} workspace root(s)", package_roots.len());
     }
 
     let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
@@ -202,16 +204,19 @@ pub async fn run_server(
     let state = Arc::new(state);
 
     // When config exists, boot one server per language in background.
-    if matches!(state.config_source, ConfigSource::KraitToml | ConfigSource::LegacyKraitToml) {
+    if matches!(
+        state.config_source,
+        ConfigSource::KraitToml | ConfigSource::LegacyKraitToml
+    ) {
         spawn_background_boot(Arc::clone(&state));
     }
 
     // Install SIGTERM handler for graceful shutdown
     let state_for_sigterm = Arc::clone(&state);
     tokio::spawn(async move {
-        if let Ok(mut sigterm) = tokio::signal::unix::signal(
-            tokio::signal::unix::SignalKind::terminate(),
-        ) {
+        if let Ok(mut sigterm) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
             sigterm.recv().await;
             info!("received SIGTERM, shutting down gracefully");
             state_for_sigterm.pool.shutdown_all().await;
@@ -264,11 +269,7 @@ pub async fn run_server(
 }
 
 /// Apply config-driven pool settings (priority workspaces, max sessions).
-fn apply_pool_config(
-    state: &DaemonState,
-    loaded: &config::LoadedConfig,
-    project_root: &Path,
-) {
+fn apply_pool_config(state: &DaemonState, loaded: &config::LoadedConfig, project_root: &Path) {
     if let Some(ref cfg) = loaded.config {
         if let Some(max) = cfg.max_active_sessions {
             state.pool.set_max_lru_sessions(max);
@@ -306,7 +307,10 @@ fn spawn_background_boot(state: Arc<DaemonState>) {
         tokio::spawn(async move {
             match pool.get_or_start(lang).await {
                 Ok(mut guard) => {
-                    if let Err(e) = pool.attach_all_workspaces_with_guard(lang, &mut guard).await {
+                    if let Err(e) = pool
+                        .attach_all_workspaces_with_guard(lang, &mut guard)
+                        .await
+                    {
                         debug!("background boot: attach failed for {lang}: {e}");
                     }
                     info!("booted {lang}");
@@ -363,15 +367,25 @@ async fn dispatch(request: &Request, state: &DaemonState) -> Response {
             handle_check(path.as_deref(), *errors_only, state).await
         }
         Request::Init => handle_init(state).await,
-        Request::FindSymbol { name, path_filter, src_only, include_body } => {
-            handle_find_symbol(name, path_filter.as_deref(), *src_only, *include_body, state).await
+        Request::FindSymbol {
+            name,
+            path_filter,
+            src_only,
+            include_body,
+        } => {
+            handle_find_symbol(
+                name,
+                path_filter.as_deref(),
+                *src_only,
+                *include_body,
+                state,
+            )
+            .await
         }
         Request::FindRefs { name, with_symbol } => {
             handle_find_refs(name, *with_symbol, state).await
         }
-        Request::FindImpl { name } => {
-            handle_find_impl(name, state).await
-        }
+        Request::FindImpl { name } => handle_find_impl(name, state).await,
         Request::ListSymbols { path, depth } => handle_list_symbols(path, *depth, state).await,
         Request::ReadFile {
             path,
@@ -385,7 +399,17 @@ async fn dispatch(request: &Request, state: &DaemonState) -> Response {
             max_lines,
             path_filter,
             has_body,
-        } => handle_read_symbol(name, *signature_only, *max_lines, path_filter.as_deref(), *has_body, state).await,
+        } => {
+            handle_read_symbol(
+                name,
+                *signature_only,
+                *max_lines,
+                path_filter.as_deref(),
+                *has_body,
+                state,
+            )
+            .await
+        }
         Request::EditReplace { symbol, code } => {
             handle_edit(symbol, code, EditKind::Replace, state).await
         }
@@ -430,7 +454,8 @@ async fn handle_server_restart(language: &str, state: &DaemonState) -> Response 
 
     match state.pool.restart_language(lang).await {
         Ok(()) => {
-            let server_name = crate::lsp::registry::get_entry(lang).map_or_else(|| "unknown".to_string(), |e| e.binary_name.to_string());
+            let server_name = crate::lsp::registry::get_entry(lang)
+                .map_or_else(|| "unknown".to_string(), |e| e.binary_name.to_string());
             Response::ok(json!({
                 "restarted": language,
                 "server_name": server_name,
@@ -441,16 +466,37 @@ async fn handle_server_restart(language: &str, state: &DaemonState) -> Response 
 }
 
 /// Find symbol across all languages — runs each language concurrently.
-async fn handle_find_symbol(name: &str, path_filter: Option<&str>, src_only: bool, include_body: bool, state: &DaemonState) -> Response {
+async fn handle_find_symbol(
+    name: &str,
+    path_filter: Option<&str>,
+    src_only: bool,
+    include_body: bool,
+    state: &DaemonState,
+) -> Response {
     // Cache-first: try the index before touching LSP
     if let Ok(guard) = state.index.lock() {
         if let Some(ref store) = *guard {
-            if let Some(results) = cache_query::cached_find_symbol(store, name, &state.project_root, state.dirty_files_ref())
-            {
-                debug!("find_symbol cache hit for '{name}' ({} results)", results.len());
+            if let Some(results) = cache_query::cached_find_symbol(
+                store,
+                name,
+                &state.project_root,
+                state.dirty_files_ref(),
+            ) {
+                debug!(
+                    "find_symbol cache hit for '{name}' ({} results)",
+                    results.len()
+                );
                 let filtered = filter_by_path(results, path_filter);
-                let filtered = if src_only { filter_src_only(filtered, &state.project_root) } else { filtered };
-                let filtered = if include_body { populate_bodies(filtered, &state.project_root) } else { filtered };
+                let filtered = if src_only {
+                    filter_src_only(filtered, &state.project_root)
+                } else {
+                    filtered
+                };
+                let filtered = if include_body {
+                    populate_bodies(filtered, &state.project_root)
+                } else {
+                    filtered
+                };
                 return Response::ok(serde_json::to_value(filtered).unwrap_or_default());
             }
         }
@@ -471,8 +517,10 @@ async fn handle_find_symbol(name: &str, path_filter: Option<&str>, src_only: boo
             let lang = *lang;
             tokio::spawn(async move {
                 let mut guard = pool.get_or_start(lang).await?;
-                pool.attach_all_workspaces_with_guard(lang, &mut guard).await?;
-                let session = guard.session_mut()
+                pool.attach_all_workspaces_with_guard(lang, &mut guard)
+                    .await?;
+                let session = guard
+                    .session_mut()
                     .ok_or_else(|| anyhow::anyhow!("no session for {lang}"))?;
                 find::find_symbol(&name, &mut session.client, &project_root).await
             })
@@ -507,23 +555,38 @@ async fn handle_find_symbol(name: &str, path_filter: Option<&str>, src_only: boo
         // identifiers that workspace/symbol doesn't index.
         let name_owned = name.to_string();
         let root = state.project_root.clone();
-        let fallback = tokio::task::spawn_blocking(move || {
-            find::text_search_find_symbol(&name_owned, &root)
-        })
-        .await
-        .unwrap_or_default();
+        let fallback =
+            tokio::task::spawn_blocking(move || find::text_search_find_symbol(&name_owned, &root))
+                .await
+                .unwrap_or_default();
 
         let filtered = filter_by_path(fallback, path_filter);
-        let filtered = if src_only { filter_src_only(filtered, &state.project_root) } else { filtered };
+        let filtered = if src_only {
+            filter_src_only(filtered, &state.project_root)
+        } else {
+            filtered
+        };
         if filtered.is_empty() {
             return Response::ok(json!([]));
         }
-        let filtered = if include_body { populate_bodies(filtered, &state.project_root) } else { filtered };
+        let filtered = if include_body {
+            populate_bodies(filtered, &state.project_root)
+        } else {
+            filtered
+        };
         Response::ok(serde_json::to_value(filtered).unwrap_or_default())
     } else {
         let filtered = filter_by_path(merged, path_filter);
-        let filtered = if src_only { filter_src_only(filtered, &state.project_root) } else { filtered };
-        let filtered = if include_body { populate_bodies(filtered, &state.project_root) } else { filtered };
+        let filtered = if src_only {
+            filter_src_only(filtered, &state.project_root)
+        } else {
+            filtered
+        };
+        let filtered = if include_body {
+            populate_bodies(filtered, &state.project_root)
+        } else {
+            filtered
+        };
         Response::ok(serde_json::to_value(filtered).unwrap_or_default())
     }
 }
@@ -544,10 +607,18 @@ async fn handle_find_refs(name: &str, with_symbol: bool, state: &DaemonState) ->
             let lang = *lang;
             tokio::spawn(async move {
                 let mut guard = pool.get_or_start(lang).await?;
-                pool.attach_all_workspaces_with_guard(lang, &mut guard).await?;
-                let session = guard.session_mut()
+                pool.attach_all_workspaces_with_guard(lang, &mut guard)
+                    .await?;
+                let session = guard
+                    .session_mut()
                     .ok_or_else(|| anyhow::anyhow!("no session for {lang}"))?;
-                find::find_refs(&name, &mut session.client, &mut session.file_tracker, &project_root).await
+                find::find_refs(
+                    &name,
+                    &mut session.client,
+                    &mut session.file_tracker,
+                    &project_root,
+                )
+                .await
             })
         })
         .collect();
@@ -578,7 +649,11 @@ async fn handle_find_refs(name: &str, with_symbol: bool, state: &DaemonState) ->
     if merged.is_empty() || !has_call_sites {
         let readiness = state.pool.readiness();
         let uptime = state.start_time.elapsed().as_secs();
-        if merged.is_empty() && uptime < INDEXING_GRACE_PERIOD_SECS && readiness.total > 0 && !readiness.is_all_ready() {
+        if merged.is_empty()
+            && uptime < INDEXING_GRACE_PERIOD_SECS
+            && readiness.total > 0
+            && !readiness.is_all_ready()
+        {
             return Response::err_with_advice(
                 "indexing",
                 format!(
@@ -593,16 +668,17 @@ async fn handle_find_refs(name: &str, with_symbol: bool, state: &DaemonState) ->
         // Merge with any LSP definition results already found.
         let name_owned = name.to_string();
         let root = state.project_root.clone();
-        let text_results = tokio::task::spawn_blocking(move || {
-            find::text_search_find_refs(&name_owned, &root)
-        })
-        .await
-        .unwrap_or_default();
+        let text_results =
+            tokio::task::spawn_blocking(move || find::text_search_find_refs(&name_owned, &root))
+                .await
+                .unwrap_or_default();
 
         // Merge: keep LSP definition results + text search results, dedup by path:line
         let mut combined = merged;
         for r in text_results {
-            let already_present = combined.iter().any(|m| m.path == r.path && m.line == r.line);
+            let already_present = combined
+                .iter()
+                .any(|m| m.path == r.path && m.line == r.line);
             if !already_present {
                 combined.push(r);
             }
@@ -695,8 +771,8 @@ fn filter_src_only(symbols: Vec<find::SymbolMatch>, project_root: &Path) -> Vec<
 /// For every unique file in `refs`, fetches the document symbol tree via LSP
 /// and resolves which symbol's range contains each reference line.
 async fn enrich_with_symbols(refs: &mut [find::ReferenceMatch], state: &DaemonState) {
-    use std::collections::HashMap;
     use crate::commands::list;
+    use std::collections::HashMap;
 
     // Collect unique non-definition file paths
     let files: std::collections::HashSet<String> = refs
@@ -709,8 +785,12 @@ async fn enrich_with_symbols(refs: &mut [find::ReferenceMatch], state: &DaemonSt
 
     for file_path in files {
         let abs_path = state.project_root.join(&file_path);
-        let Ok(mut guard) = state.pool.route_for_file(&abs_path).await else { continue };
-        let Some(session) = guard.session_mut() else { continue };
+        let Ok(mut guard) = state.pool.route_for_file(&abs_path).await else {
+            continue;
+        };
+        let Some(session) = guard.session_mut() else {
+            continue;
+        };
         if let Ok(symbols) = list::list_symbols(
             &abs_path,
             3,
@@ -750,17 +830,23 @@ async fn handle_list_symbols(path: &Path, depth: u8, state: &DaemonState) -> Res
     let rel_path = path.to_string_lossy();
     if let Ok(guard) = state.index.lock() {
         if let Some(ref store) = *guard {
-            if let Some(symbols) =
-                cache_query::cached_list_symbols(store, &rel_path, depth, &state.project_root, state.dirty_files_ref())
-            {
-                debug!("list_symbols cache hit for '{rel_path}' ({} symbols)", symbols.len());
+            if let Some(symbols) = cache_query::cached_list_symbols(
+                store,
+                &rel_path,
+                depth,
+                &state.project_root,
+                state.dirty_files_ref(),
+            ) {
+                debug!(
+                    "list_symbols cache hit for '{rel_path}' ({} symbols)",
+                    symbols.len()
+                );
                 return Response::ok(serde_json::to_value(symbols).unwrap_or_default());
             }
         }
     }
 
-    let lang = language_for_file(path)
-        .or_else(|| state.languages.first().copied());
+    let lang = language_for_file(path).or_else(|| state.languages.first().copied());
 
     let Some(lang) = lang else {
         return Response::err("no_language", "No language detected in project");
@@ -908,7 +994,10 @@ async fn handle_init(state: &DaemonState) -> Response {
         Err(resp) => return resp,
     };
     let phase2_dur = phase2_start.elapsed();
-    info!("init: phase 2 (LSP) {phase2_dur:?} — {} results", all_results.len());
+    info!(
+        "init: phase 2 (LSP) {phase2_dur:?} — {} results",
+        all_results.len()
+    );
 
     // Phase 3: write results to DB
     let phase3_start = Instant::now();
@@ -971,12 +1060,14 @@ fn plan_index_phase(
     state: &DaemonState,
     exts: &[&str],
 ) -> Result<(Vec<builder::FileEntry>, usize), Response> {
-    let store = IndexStore::open(db_path).or_else(|e| {
-        // Corrupted DB — delete and retry with a fresh one
-        info!("index DB corrupted in plan phase ({e}), deleting");
-        let _ = std::fs::remove_file(db_path);
-        IndexStore::open(db_path)
-    }).map_err(|e| Response::err("init_failed", format!("failed to open index DB: {e}")))?;
+    let store = IndexStore::open(db_path)
+        .or_else(|e| {
+            // Corrupted DB — delete and retry with a fresh one
+            info!("index DB corrupted in plan phase ({e}), deleting");
+            let _ = std::fs::remove_file(db_path);
+            IndexStore::open(db_path)
+        })
+        .map_err(|e| Response::err("init_failed", format!("failed to open index DB: {e}")))?;
     builder::plan_index(&store, &state.project_root, exts)
         .map_err(|e| Response::err("init_failed", format!("failed to plan index: {e}")))
 }
@@ -1024,7 +1115,10 @@ async fn collect_symbols_parallel(
             continue;
         }
 
-        info!("init: {lang} — {} files, {num_workers} workers", lang_files.len());
+        info!(
+            "init: {lang} — {} files, {num_workers} workers",
+            lang_files.len()
+        );
         let lang = *lang;
         let root = state.project_root.clone();
         handles.push(tokio::spawn(async move {
@@ -1083,7 +1177,11 @@ fn language_extensions(languages: &[Language]) -> Vec<String> {
         match lang {
             Language::TypeScript | Language::JavaScript => {
                 // TS/JS share file types — watch both when either is detected
-                for &e in Language::TypeScript.extensions().iter().chain(Language::JavaScript.extensions()) {
+                for &e in Language::TypeScript
+                    .extensions()
+                    .iter()
+                    .chain(Language::JavaScript.extensions())
+                {
                     exts.push(e.to_string());
                 }
             }
@@ -1139,8 +1237,13 @@ async fn handle_read_symbol(
         // Try to get all candidates from the index
         let filtered = if let Ok(guard) = state.index.lock() {
             if let Some(ref store) = *guard {
-                cache_query::cached_find_symbol(store, name, &state.project_root, state.dirty_files_ref())
-                    .map(|all| filter_by_path(all, Some(filter)))
+                cache_query::cached_find_symbol(
+                    store,
+                    name,
+                    &state.project_root,
+                    state.dirty_files_ref(),
+                )
+                .map(|all| filter_by_path(all, Some(filter)))
             } else {
                 None
             }
@@ -1153,12 +1256,24 @@ async fn handle_read_symbol(
                 // Have filtered candidates from cache — use LSP session to read body
                 let languages = state.pool.unique_languages();
                 for lang in &languages {
-                    let Ok(mut guard) = state.pool.get_or_start(*lang).await else { continue };
-                    let Some(session) = guard.session_mut() else { continue };
+                    let Ok(mut guard) = state.pool.get_or_start(*lang).await else {
+                        continue;
+                    };
+                    let Some(session) = guard.session_mut() else {
+                        continue;
+                    };
                     match read::handle_read_symbol(
-                        name, &candidates, signature_only, max_lines, has_body,
-                        &mut session.client, &mut session.file_tracker, &state.project_root,
-                    ).await {
+                        name,
+                        &candidates,
+                        signature_only,
+                        max_lines,
+                        has_body,
+                        &mut session.client,
+                        &mut session.file_tracker,
+                        &state.project_root,
+                    )
+                    .await
+                    {
                         Ok(data) => return Response::ok(data),
                         Err(e) => return Response::err("read_symbol_failed", e.to_string()),
                     }
@@ -1201,14 +1316,23 @@ async fn handle_read_symbol(
     for lang in &languages {
         let mut guard = match state.pool.get_or_start(*lang).await {
             Ok(g) => g,
-            Err(e) => { debug!("skipping {lang}: {e}"); continue; }
+            Err(e) => {
+                debug!("skipping {lang}: {e}");
+                continue;
+            }
         };
-        if let Err(e) = state.pool.attach_all_workspaces_with_guard(*lang, &mut guard).await {
+        if let Err(e) = state
+            .pool
+            .attach_all_workspaces_with_guard(*lang, &mut guard)
+            .await
+        {
             debug!("skipping {lang}: {e}");
             continue;
         }
 
-        let Some(session) = guard.session_mut() else { continue };
+        let Some(session) = guard.session_mut() else {
+            continue;
+        };
 
         // Find symbol candidates in this language, optionally filtered by path
         let raw_candidates =
@@ -1275,14 +1399,30 @@ async fn handle_find_impl(name: &str, state: &DaemonState) -> Response {
     for lang in &languages {
         let mut guard = match state.pool.get_or_start(*lang).await {
             Ok(g) => g,
-            Err(e) => { debug!("find_impl skipping {lang}: {e}"); continue; }
+            Err(e) => {
+                debug!("find_impl skipping {lang}: {e}");
+                continue;
+            }
         };
-        if let Err(e) = state.pool.attach_all_workspaces_with_guard(*lang, &mut guard).await {
+        if let Err(e) = state
+            .pool
+            .attach_all_workspaces_with_guard(*lang, &mut guard)
+            .await
+        {
             debug!("find_impl skipping {lang}: {e}");
             continue;
         }
-        let Some(session) = guard.session_mut() else { continue };
-        match find::find_impl(name, &mut session.client, &mut session.file_tracker, &state.project_root).await {
+        let Some(session) = guard.session_mut() else {
+            continue;
+        };
+        match find::find_impl(
+            name,
+            &mut session.client,
+            &mut session.file_tracker,
+            &state.project_root,
+        )
+        .await
+        {
             Ok(results) => all_results.extend(results),
             Err(e) => debug!("find_impl failed for {lang}: {e}"),
         }
@@ -1321,43 +1461,58 @@ async fn handle_edit(name: &str, code: &str, kind: EditKind, state: &DaemonState
     for lang in &languages {
         let mut guard = match state.pool.get_or_start(*lang).await {
             Ok(g) => g,
-            Err(e) => { debug!("skipping {lang}: {e}"); continue; }
+            Err(e) => {
+                debug!("skipping {lang}: {e}");
+                continue;
+            }
         };
-        if let Err(e) = state.pool.attach_all_workspaces_with_guard(*lang, &mut guard).await {
+        if let Err(e) = state
+            .pool
+            .attach_all_workspaces_with_guard(*lang, &mut guard)
+            .await
+        {
             debug!("skipping {lang} attach: {e}");
             continue;
         }
 
-        let Some(session) = guard.session_mut() else { continue };
+        let Some(session) = guard.session_mut() else {
+            continue;
+        };
 
         let result = match kind {
-            EditKind::Replace => edit::handle_edit_replace(
-                name,
-                code,
-                &mut session.client,
-                &mut session.file_tracker,
-                &state.project_root,
-                &state.dirty_files,
-            )
-            .await,
-            EditKind::InsertAfter => edit::handle_edit_insert_after(
-                name,
-                code,
-                &mut session.client,
-                &mut session.file_tracker,
-                &state.project_root,
-                &state.dirty_files,
-            )
-            .await,
-            EditKind::InsertBefore => edit::handle_edit_insert_before(
-                name,
-                code,
-                &mut session.client,
-                &mut session.file_tracker,
-                &state.project_root,
-                &state.dirty_files,
-            )
-            .await,
+            EditKind::Replace => {
+                edit::handle_edit_replace(
+                    name,
+                    code,
+                    &mut session.client,
+                    &mut session.file_tracker,
+                    &state.project_root,
+                    &state.dirty_files,
+                )
+                .await
+            }
+            EditKind::InsertAfter => {
+                edit::handle_edit_insert_after(
+                    name,
+                    code,
+                    &mut session.client,
+                    &mut session.file_tracker,
+                    &state.project_root,
+                    &state.dirty_files,
+                )
+                .await
+            }
+            EditKind::InsertBefore => {
+                edit::handle_edit_insert_before(
+                    name,
+                    code,
+                    &mut session.client,
+                    &mut session.file_tracker,
+                    &state.project_root,
+                    &state.dirty_files,
+                )
+                .await
+            }
         };
 
         match result {
@@ -1397,28 +1552,51 @@ async fn handle_edit(name: &str, code: &str, kind: EditKind, state: &DaemonState
 /// If `path` is given, actively reopens the file so the LSP analyses its current on-disk
 /// content (important after `krait edit`), then waits for `publishDiagnostics` to arrive.
 /// If no path, returns diagnostics accumulated passively from prior queries.
-async fn handle_check(path: Option<&std::path::Path>, errors_only: bool, state: &DaemonState) -> Response {
+async fn handle_check(
+    path: Option<&std::path::Path>,
+    errors_only: bool,
+    state: &DaemonState,
+) -> Response {
     const DIAG_WAIT_MS: u64 = 3_000;
 
     if let Some(file_path) = path {
         let Some(lang) = language_for_file(file_path) else {
             // Unknown language — return any passively-stored diagnostics
-            let data = check::handle_check(Some(file_path), &state.diagnostic_store, &state.project_root, errors_only);
+            let data = check::handle_check(
+                Some(file_path),
+                &state.diagnostic_store,
+                &state.project_root,
+                errors_only,
+            );
             return Response::ok(data);
         };
 
         // Ensure the LSP is running for this language
         let Ok(mut guard) = state.pool.get_or_start(lang).await else {
             // Can't reach LSP — return passive diagnostics
-            let data = check::handle_check(path, &state.diagnostic_store, &state.project_root, errors_only);
+            let data = check::handle_check(
+                path,
+                &state.diagnostic_store,
+                &state.project_root,
+                errors_only,
+            );
             return Response::ok(data);
         };
-        if let Err(e) = state.pool.attach_all_workspaces_with_guard(lang, &mut guard).await {
+        if let Err(e) = state
+            .pool
+            .attach_all_workspaces_with_guard(lang, &mut guard)
+            .await
+        {
             return Response::err("lsp_error", e.to_string());
         }
 
         let Some(session) = guard.session_mut() else {
-            let data = check::handle_check(path, &state.diagnostic_store, &state.project_root, errors_only);
+            let data = check::handle_check(
+                path,
+                &state.diagnostic_store,
+                &state.project_root,
+                errors_only,
+            );
             return Response::ok(data);
         };
 
@@ -1438,21 +1616,26 @@ async fn handle_check(path: Option<&std::path::Path>, errors_only: bool, state: 
             let params = serde_json::json!({
                 "textDocument": { "uri": uri.as_str() }
             });
-            if let Ok(req_id) = session.client.transport_mut()
+            if let Ok(req_id) = session
+                .client
+                .transport_mut()
                 .send_request("textDocument/documentSymbol", params)
                 .await
             {
                 let timeout = std::time::Duration::from_millis(DIAG_WAIT_MS);
-                let _ = tokio::time::timeout(
-                    timeout,
-                    session.client.wait_for_response_public(req_id),
-                )
-                .await;
+                let _ =
+                    tokio::time::timeout(timeout, session.client.wait_for_response_public(req_id))
+                        .await;
             }
         }
     }
 
-    let data = check::handle_check(path, &state.diagnostic_store, &state.project_root, errors_only);
+    let data = check::handle_check(
+        path,
+        &state.diagnostic_store,
+        &state.project_root,
+        errors_only,
+    );
     Response::ok(data)
 }
 
@@ -1473,11 +1656,17 @@ async fn handle_hover_cmd(name: &str, state: &DaemonState) -> Response {
                 continue;
             }
         };
-        if let Err(e) = state.pool.attach_all_workspaces_with_guard(*lang, &mut guard).await {
+        if let Err(e) = state
+            .pool
+            .attach_all_workspaces_with_guard(*lang, &mut guard)
+            .await
+        {
             debug!("skipping {lang} attach: {e}");
             continue;
         }
-        let Some(session) = guard.session_mut() else { continue };
+        let Some(session) = guard.session_mut() else {
+            continue;
+        };
         match hover::handle_hover(
             name,
             &mut session.client,
@@ -1513,7 +1702,11 @@ async fn handle_format_cmd(path: &std::path::Path, state: &DaemonState) -> Respo
         Ok(g) => g,
         Err(e) => return Response::err("lsp_not_available", e.to_string()),
     };
-    if let Err(e) = state.pool.attach_all_workspaces_with_guard(lang, &mut guard).await {
+    if let Err(e) = state
+        .pool
+        .attach_all_workspaces_with_guard(lang, &mut guard)
+        .await
+    {
         debug!("format attach warning: {e}");
     }
     let Some(session) = guard.session_mut() else {
@@ -1548,11 +1741,17 @@ async fn handle_rename_cmd(name: &str, new_name: &str, state: &DaemonState) -> R
                 continue;
             }
         };
-        if let Err(e) = state.pool.attach_all_workspaces_with_guard(*lang, &mut guard).await {
+        if let Err(e) = state
+            .pool
+            .attach_all_workspaces_with_guard(*lang, &mut guard)
+            .await
+        {
             debug!("skipping {lang} attach: {e}");
             continue;
         }
-        let Some(session) = guard.session_mut() else { continue };
+        let Some(session) = guard.session_mut() else {
+            continue;
+        };
         match rename::handle_rename(
             name,
             new_name,
@@ -1594,11 +1793,17 @@ async fn handle_fix_cmd(path: Option<&std::path::Path>, state: &DaemonState) -> 
                 continue;
             }
         };
-        if let Err(e) = state.pool.attach_all_workspaces_with_guard(*lang, &mut guard).await {
+        if let Err(e) = state
+            .pool
+            .attach_all_workspaces_with_guard(*lang, &mut guard)
+            .await
+        {
             debug!("skipping {lang} attach: {e}");
             continue;
         }
-        let Some(session) = guard.session_mut() else { continue };
+        let Some(session) = guard.session_mut() else {
+            continue;
+        };
         match fix::handle_fix(
             path,
             &mut session.client,
@@ -1630,9 +1835,7 @@ fn build_status_response(state: &DaemonState) -> Response {
             match state.languages.first() {
                 Some(lang) => {
                     let entry = get_entry(*lang);
-                    let available = entry
-                        .as_ref()
-                        .is_some_and(|e| find_server(e).is_some());
+                    let available = entry.as_ref().is_some_and(|e| find_server(e).is_some());
                     let server = entry.as_ref().map_or("unknown", |e| e.binary_name);
                     let advice = entry.as_ref().map(|e| e.install_advice);
                     json!({
@@ -1794,7 +1997,11 @@ mod tests {
     #[tokio::test]
     async fn status_shows_language_detection() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"test\"\n").unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"test\"\n",
+        )
+        .unwrap();
 
         let sock = dir.path().join("test.sock");
         let handle = start_server(&sock, dir.path(), 5);
@@ -1811,7 +2018,11 @@ mod tests {
     #[tokio::test]
     async fn status_shows_workspace_count() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"test\"\n").unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"test\"\n",
+        )
+        .unwrap();
 
         let sock = dir.path().join("test.sock");
         let handle = start_server(&sock, dir.path(), 5);
@@ -1883,9 +2094,9 @@ mod tests {
         let mut tasks = Vec::new();
         for _ in 0..3 {
             let s = sock.clone();
-            tasks.push(tokio::spawn(
-                async move { send_request(&s, &Request::Status).await },
-            ));
+            tasks.push(tokio::spawn(async move {
+                send_request(&s, &Request::Status).await
+            }));
         }
 
         for task in tasks {
@@ -1939,7 +2150,10 @@ mod tests {
 
         // The connection should be closed by the server
         let result = stream.read_u32().await;
-        assert!(result.is_err(), "server should close connection on oversized frame");
+        assert!(
+            result.is_err(),
+            "server should close connection on oversized frame"
+        );
 
         // Daemon should still be running after rejecting the bad frame
         let resp = send_request(&sock, &Request::Status).await;

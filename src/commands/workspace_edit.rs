@@ -99,22 +99,30 @@ fn apply_text_edits_to_file(path: &Path, edits: &[Value]) -> anyhow::Result<()> 
 
     for edit in sorted {
         #[allow(clippy::cast_possible_truncation)]
-        let start_line =
-            edit.pointer("/range/start/line").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let start_line = edit
+            .pointer("/range/start/line")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
         #[allow(clippy::cast_possible_truncation)]
         let start_char = edit
             .pointer("/range/start/character")
             .and_then(Value::as_u64)
             .unwrap_or(0) as usize;
         #[allow(clippy::cast_possible_truncation)]
-        let end_line =
-            edit.pointer("/range/end/line").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let end_line = edit
+            .pointer("/range/end/line")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
         #[allow(clippy::cast_possible_truncation)]
-        let end_char =
-            edit.pointer("/range/end/character").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let end_char = edit
+            .pointer("/range/end/character")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
         let new_text = edit.get("newText").and_then(Value::as_str).unwrap_or("");
 
-        apply_single_edit(&mut lines, start_line, start_char, end_line, end_char, new_text);
+        apply_single_edit(
+            &mut lines, start_line, start_char, end_line, end_char, new_text,
+        );
     }
 
     let mut new_content = lines.join("\n");

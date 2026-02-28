@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use tokio::sync::{Mutex, OwnedMutexGuard};
 use tracing::{debug, info, warn};
 
@@ -11,7 +11,7 @@ use super::client::LspClient;
 use super::diagnostics::DiagnosticStore;
 use super::files::FileTracker;
 use super::install;
-use crate::detect::{Language, language_for_file};
+use crate::detect::{language_for_file, Language};
 
 /// Maximum crashes before permanent failure (`MultiRoot` only).
 const MAX_CRASHES: u32 = 5;
@@ -62,7 +62,11 @@ pub struct LanguageState {
 
 impl LanguageState {
     fn new() -> Self {
-        Self { strategy: None, crash_count: 0, failed: None }
+        Self {
+            strategy: None,
+            crash_count: 0,
+            failed: None,
+        }
     }
 
     /// Get a mutable reference to any active session for this language.
@@ -70,9 +74,7 @@ impl LanguageState {
         match &mut self.strategy {
             Some(ServerStrategy::MultiRoot(slot)) => Some(&mut slot.session),
             Some(ServerStrategy::LruPerRoot(slots)) => {
-                let (_, slot) = slots
-                    .iter_mut()
-                    .max_by_key(|(_, s)| s.last_used_at)?;
+                let (_, slot) = slots.iter_mut().max_by_key(|(_, s)| s.last_used_at)?;
                 slot.last_used_at = Instant::now();
                 Some(&mut slot.session)
             }
@@ -81,7 +83,7 @@ impl LanguageState {
     }
 
     /// Whether a live session exists.
-    #[must_use] 
+    #[must_use]
     pub fn is_ready(&self) -> bool {
         match &self.strategy {
             Some(ServerStrategy::MultiRoot(_)) => true,
@@ -350,7 +352,10 @@ impl LspMultiplexer {
     /// Returns an error if a session fails to boot (non-fatal, logged by caller).
     pub async fn warm_priority_roots(&self) -> anyhow::Result<()> {
         let roots_to_warm: Vec<(Language, PathBuf)> = {
-            let cfg = self.config.read().map_err(|_| anyhow::anyhow!("config lock poisoned"))?;
+            let cfg = self
+                .config
+                .read()
+                .map_err(|_| anyhow::anyhow!("config lock poisoned"))?;
             self.workspace_roots
                 .iter()
                 .filter(|(_, root)| cfg.priority_roots.contains(root))
@@ -360,7 +365,9 @@ impl LspMultiplexer {
 
         for (lang, root) in &roots_to_warm {
             // Only meaningful for LRU strategy
-            let Ok(lock) = self.language_lock(*lang) else { continue };
+            let Ok(lock) = self.language_lock(*lang) else {
+                continue;
+            };
             let mut guard = lock.lock_owned().await;
 
             // Skip if not LRU or already warm
@@ -389,8 +396,7 @@ impl LspMultiplexer {
             .languages
             .iter()
             .filter(|(_, lock)| {
-                lock.try_lock()
-                    .map_or(true, |g| g.is_ready()) // treat "in use" as active
+                lock.try_lock().map_or(true, |g| g.is_ready()) // treat "in use" as active
             })
             .map(|(l, _)| *l)
             .collect();
@@ -450,9 +456,7 @@ impl LspMultiplexer {
         let ready = self
             .languages
             .iter()
-            .filter(|(_, lock)| {
-                lock.try_lock().map_or(true, |g| g.is_ready())
-            })
+            .filter(|(_, lock)| lock.try_lock().map_or(true, |g| g.is_ready()))
             .count();
         Readiness {
             ready,
@@ -534,7 +538,9 @@ impl LspMultiplexer {
 
         // Find the LRU language (not current, not in-use)
         let victim = {
-            let Ok(last_used) = self.last_used.read() else { return };
+            let Ok(last_used) = self.last_used.read() else {
+                return;
+            };
             self.languages
                 .keys()
                 .filter(|&&l| l != current_lang)
@@ -705,11 +711,7 @@ impl LspMultiplexer {
     }
 
     /// Boot a single LSP server slot (shared by both strategies).
-    async fn boot_slot(
-        &self,
-        lang: Language,
-        workspace_root: &Path,
-    ) -> anyhow::Result<ServerSlot> {
+    async fn boot_slot(&self, lang: Language, workspace_root: &Path) -> anyhow::Result<ServerSlot> {
         let (binary_path, entry) = install::ensure_server(lang).await?;
 
         let mut client =
@@ -726,7 +728,6 @@ impl LspMultiplexer {
             .with_context(|| format!("LSP initialize failed for {lang}"))?;
 
         let server_name = client.server_name().to_string();
-
 
         let mut file_tracker = FileTracker::new(lang);
         if let Some(warmup_file) = find_warmup_file(workspace_root, lang) {
@@ -754,11 +755,7 @@ impl LspMultiplexer {
     }
 
     /// Evict the least-recently-used LRU session for a language.
-    async fn evict_lru(
-        &self,
-        state: &mut LanguageState,
-        lang: Language,
-    ) -> anyhow::Result<()> {
+    async fn evict_lru(&self, state: &mut LanguageState, lang: Language) -> anyhow::Result<()> {
         let priority_roots = self
             .config
             .read()
@@ -946,8 +943,10 @@ fn slot_status(lang: Language, state: &LanguageState, total_folders: usize) -> S
             total_folders,
         },
         Some(ServerStrategy::LruPerRoot(slots)) if !slots.is_empty() => {
-            let total_files: usize =
-                slots.values().map(|s| s.session.file_tracker.open_count()).sum();
+            let total_files: usize = slots
+                .values()
+                .map(|s| s.session.file_tracker.open_count())
+                .sum();
             let oldest = slots
                 .values()
                 .map(|s| s.started_at)
@@ -968,7 +967,11 @@ fn slot_status(lang: Language, state: &LanguageState, total_folders: usize) -> S
             }
         }
         _ => {
-            let status = if state.failed.is_some() { "failed" } else { "pending" };
+            let status = if state.failed.is_some() {
+                "failed"
+            } else {
+                "pending"
+            };
             ServerStatus {
                 server_name: default_server_name(lang),
                 language: lang.name().to_string(),
@@ -1001,7 +1004,6 @@ fn default_server_name(lang: Language) -> String {
     get_entry(lang).map_or_else(|| lang.name().to_string(), |e| e.binary_name.to_string())
 }
 
-
 /// Probe the LSP server with documentSymbol until it responds or max attempts reached.
 ///
 /// Uses `wait_for_response_with_timeout` so every response is consumed internally —
@@ -1030,13 +1032,19 @@ async fn probe_until_ready(client: &mut LspClient, warmup_file: &std::path::Path
             )
             .await;
         if let Ok(req_id) = probe {
-            match client.wait_for_response_with_timeout(req_id, PROBE_TIMEOUT).await {
+            match client
+                .wait_for_response_with_timeout(req_id, PROBE_TIMEOUT)
+                .await
+            {
                 Ok(resp) if resp != serde_json::Value::Null => {
                     debug!("probe_until_ready: ready after {} attempts", attempt + 1);
                     return;
                 }
                 Ok(_) => {
-                    debug!("probe_until_ready: null response on attempt {}", attempt + 1);
+                    debug!(
+                        "probe_until_ready: null response on attempt {}",
+                        attempt + 1
+                    );
                 }
                 Err(e) => {
                     debug!("probe_until_ready: attempt {} failed: {e}", attempt + 1);
@@ -1156,10 +1164,7 @@ mod tests {
     fn find_nearest_workspace_picks_deepest() {
         let roots = vec![
             (Language::TypeScript, PathBuf::from("/project")),
-            (
-                Language::TypeScript,
-                PathBuf::from("/project/packages/api"),
-            ),
+            (Language::TypeScript, PathBuf::from("/project/packages/api")),
         ];
         let mux = LspMultiplexer::new(PathBuf::from("/project"), roots);
         let result = mux.find_nearest_workspace(
@@ -1173,10 +1178,8 @@ mod tests {
     fn find_nearest_workspace_returns_none_for_wrong_lang() {
         let roots = vec![(Language::Rust, PathBuf::from("/project"))];
         let mux = LspMultiplexer::new(PathBuf::from("/project"), roots);
-        let result = mux.find_nearest_workspace(
-            Path::new("/project/src/index.ts"),
-            Language::TypeScript,
-        );
+        let result =
+            mux.find_nearest_workspace(Path::new("/project/src/index.ts"), Language::TypeScript);
         assert!(result.is_none());
     }
 
@@ -1243,10 +1246,7 @@ mod tests {
     fn set_max_lru_sessions() {
         let mux = LspMultiplexer::new(PathBuf::from("/project"), vec![]);
         mux.set_max_lru_sessions(5);
-        assert_eq!(
-            mux.config.read().unwrap().max_lru_sessions,
-            5
-        );
+        assert_eq!(mux.config.read().unwrap().max_lru_sessions, 5);
     }
 
     #[test]
@@ -1261,14 +1261,15 @@ mod tests {
         .into();
         mux.set_priority_roots(roots);
         assert_eq!(mux.priority_roots().len(), 2);
-        assert!(mux.priority_roots().contains(&PathBuf::from("/project/packages/core")));
+        assert!(mux
+            .priority_roots()
+            .contains(&PathBuf::from("/project/packages/core")));
     }
 
     #[tokio::test]
     #[ignore = "requires rust-analyzer installed"]
     async fn multiplexer_starts_lsp_on_demand() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/rust-hello");
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rust-hello");
         let roots = vec![(Language::Rust, fixture.clone())];
         let mux = LspMultiplexer::new(fixture.clone(), roots);
 
@@ -1282,8 +1283,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires rust-analyzer installed"]
     async fn multiplexer_reuses_existing_client() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/rust-hello");
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rust-hello");
         let roots = vec![(Language::Rust, fixture.clone())];
         let mux = LspMultiplexer::new(fixture.clone(), roots);
 
@@ -1299,8 +1299,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires rust-analyzer installed"]
     async fn multiplexer_shutdown_all() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/rust-hello");
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rust-hello");
         let roots = vec![(Language::Rust, fixture.clone())];
         let mux = LspMultiplexer::new(fixture.clone(), roots);
 
@@ -1314,8 +1313,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires rust-analyzer installed"]
     async fn multiplexer_status_shows_info() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/rust-hello");
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rust-hello");
         let roots = vec![(Language::Rust, fixture.clone())];
         let mux = LspMultiplexer::new(fixture.clone(), roots);
 

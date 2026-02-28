@@ -12,7 +12,10 @@ fn krait() -> assert_cmd::Command {
 }
 
 fn rust_hello_dir() -> &'static Path {
-    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/rust-hello"))
+    Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/rust-hello"
+    ))
 }
 
 #[test]

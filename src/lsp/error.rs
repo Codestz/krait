@@ -7,23 +7,16 @@ use crate::detect::Language;
 #[derive(Debug)]
 pub enum LspError {
     /// The LSP server binary was not found in PATH.
-    ServerNotFound {
-        language: Language,
-        advice: String,
-    },
+    ServerNotFound { language: Language, advice: String },
     /// The initialize handshake failed.
-    InitializeFailed {
-        message: String,
-    },
+    InitializeFailed { message: String },
     /// An operation timed out.
     Timeout {
         operation: String,
         duration: Duration,
     },
     /// The LSP server process crashed.
-    ServerCrashed {
-        exit_code: Option<i32>,
-    },
+    ServerCrashed { exit_code: Option<i32> },
 }
 
 impl fmt::Display for LspError {
@@ -87,9 +80,7 @@ mod tests {
 
     #[test]
     fn server_crashed_with_code() {
-        let err = LspError::ServerCrashed {
-            exit_code: Some(1),
-        };
+        let err = LspError::ServerCrashed { exit_code: Some(1) };
         assert!(err.to_string().contains("exit code 1"));
     }
 

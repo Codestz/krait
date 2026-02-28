@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use lsp_types::{
     ClientCapabilities, CodeActionClientCapabilities, DocumentSymbolClientCapabilities,
     DynamicRegistrationClientCapabilities, GotoCapability, HoverClientCapabilities,
@@ -15,7 +15,7 @@ use lsp_types::{
 use serde_json::Value;
 use tracing::debug;
 
-use super::diagnostics::{DiagnosticStore, ingest_publish_diagnostics};
+use super::diagnostics::{ingest_publish_diagnostics, DiagnosticStore};
 use super::error::LspError;
 use super::registry::{find_server, get_entry};
 use super::transport::{JsonRpcMessage, LspTransport};
@@ -89,12 +89,11 @@ impl LspClient {
             .unwrap_or("unknown")
             .to_string();
 
-        let transport =
-            LspTransport::spawn(binary_str, args, project_root).map_err(|e| {
-                LspError::InitializeFailed {
-                    message: format!("failed to spawn {binary_str}: {e}"),
-                }
-            })?;
+        let transport = LspTransport::spawn(binary_str, args, project_root).map_err(|e| {
+            LspError::InitializeFailed {
+                message: format!("failed to spawn {binary_str}: {e}"),
+            }
+        })?;
 
         debug!(
             "started LSP server for {language}: {binary_str} {}",
@@ -122,10 +121,7 @@ impl LspClient {
     ///
     /// # Panics
     /// Panics if capabilities are not stored after a successful response (should never happen).
-    pub async fn initialize(
-        &mut self,
-        project_root: &Path,
-    ) -> anyhow::Result<&ServerCapabilities> {
+    pub async fn initialize(&mut self, project_root: &Path) -> anyhow::Result<&ServerCapabilities> {
         let root_uri = path_to_uri(project_root)?;
         let params = build_initialize_params(&root_uri, project_root, self.language);
         let params_value = serde_json::to_value(&params)?;
@@ -182,15 +178,10 @@ impl LspClient {
     /// # Errors
     /// Returns an error if shutdown fails or the process doesn't exit.
     pub async fn shutdown(&mut self) -> anyhow::Result<()> {
-        let request_id = self
-            .transport
-            .send_request("shutdown", Value::Null)
-            .await?;
+        let request_id = self.transport.send_request("shutdown", Value::Null).await?;
 
         // Wait for shutdown response (with timeout)
-        let _ = self
-            .wait_for_response(request_id, SHUTDOWN_TIMEOUT)
-            .await;
+        let _ = self.wait_for_response(request_id, SHUTDOWN_TIMEOUT).await;
 
         // Send exit notification
         self.transport
@@ -253,9 +244,7 @@ impl LspClient {
                     }
                 };
                 match message {
-                    JsonRpcMessage::Notification { method, params }
-                        if method == "$/progress" =>
-                    {
+                    JsonRpcMessage::Notification { method, params } if method == "$/progress" => {
                         let kind = params
                             .as_ref()
                             .and_then(|p| p.get("value"))
@@ -515,9 +504,7 @@ pub fn path_to_uri(path: &Path) -> anyhow::Result<Uri> {
     } else {
         std::env::current_dir()?.join(path)
     };
-    let path_str = abs
-        .to_str()
-        .context("path is not valid UTF-8")?;
+    let path_str = abs.to_str().context("path is not valid UTF-8")?;
     let uri_string = format!("file://{path_str}");
     uri_string
         .parse()
@@ -536,7 +523,11 @@ fn language_init_options(_lang: Language) -> Option<Value> {
 
 /// Build the `InitializeParams` for the LSP handshake.
 #[allow(deprecated)] // root_uri is deprecated but needed for compatibility
-fn build_initialize_params(root_uri: &Uri, project_root: &Path, lang: Language) -> InitializeParams {
+fn build_initialize_params(
+    root_uri: &Uri,
+    project_root: &Path,
+    lang: Language,
+) -> InitializeParams {
     let project_name = project_root
         .file_name()
         .and_then(|n| n.to_str())

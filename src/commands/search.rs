@@ -52,10 +52,7 @@ pub struct SearchOptions {
 /// Returns an error if the regex pattern is invalid or file walking fails.
 pub fn run(opts: &SearchOptions, project_root: &Path) -> anyhow::Result<SearchOutput> {
     let re = build_regex(opts)?;
-    let search_root = opts
-        .path
-        .as_deref()
-        .unwrap_or(project_root);
+    let search_root = opts.path.as_deref().unwrap_or(project_root);
     let files = collect_files(search_root, opts)?;
     let files_searched = files.len();
 
@@ -127,11 +124,26 @@ fn normalize_grep_escapes(pattern: &str) -> String {
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.peek() {
-                Some('|') => { out.push('|');  chars.next(); }
-                Some('+') => { out.push('+');  chars.next(); }
-                Some('?') => { out.push('?');  chars.next(); }
-                Some('(') => { out.push('(');  chars.next(); }
-                Some(')') => { out.push(')');  chars.next(); }
+                Some('|') => {
+                    out.push('|');
+                    chars.next();
+                }
+                Some('+') => {
+                    out.push('+');
+                    chars.next();
+                }
+                Some('?') => {
+                    out.push('?');
+                    chars.next();
+                }
+                Some('(') => {
+                    out.push('(');
+                    chars.next();
+                }
+                Some(')') => {
+                    out.push(')');
+                    chars.next();
+                }
                 _ => out.push(c),
             }
         } else {
@@ -142,10 +154,7 @@ fn normalize_grep_escapes(pattern: &str) -> String {
 }
 
 fn collect_files(root: &Path, opts: &SearchOptions) -> anyhow::Result<Vec<PathBuf>> {
-    let extensions: Option<&[&str]> = opts
-        .lang_filter
-        .as_deref()
-        .map(extensions_for_lang);
+    let extensions: Option<&[&str]> = opts.lang_filter.as_deref().map(extensions_for_lang);
 
     let mut builder = ignore::WalkBuilder::new(root);
     builder
@@ -289,7 +298,10 @@ mod tests {
     fn finds_literal_match() {
         let dir = make_project(&[("src/lib.rs", "fn hello() {}\nfn world() {}")]);
         let o = run(
-            &SearchOptions { literal: true, ..opts("hello") },
+            &SearchOptions {
+                literal: true,
+                ..opts("hello")
+            },
             dir.path(),
         )
         .unwrap();
@@ -309,7 +321,10 @@ mod tests {
     fn ignore_case_works() {
         let dir = make_project(&[("a.rs", "Hello\nhello\nHELLO")]);
         let o = run(
-            &SearchOptions { ignore_case: true, ..opts("hello") },
+            &SearchOptions {
+                ignore_case: true,
+                ..opts("hello")
+            },
             dir.path(),
         )
         .unwrap();
@@ -320,7 +335,10 @@ mod tests {
     fn word_boundary_works() {
         let dir = make_project(&[("a.rs", "foobar\nfoo bar\nfoo")]);
         let o = run(
-            &SearchOptions { word: true, ..opts("foo") },
+            &SearchOptions {
+                word: true,
+                ..opts("foo")
+            },
             dir.path(),
         )
         .unwrap();
@@ -333,7 +351,10 @@ mod tests {
         let content: String = (1..=10).map(|i| format!("line{i}\n")).collect();
         let dir = make_project(&[("a.rs", &content)]);
         let o = run(
-            &SearchOptions { max_matches: 3, ..opts("line") },
+            &SearchOptions {
+                max_matches: 3,
+                ..opts("line")
+            },
             dir.path(),
         )
         .unwrap();
@@ -353,10 +374,7 @@ mod tests {
 
     #[test]
     fn lang_filter_ts_only() {
-        let dir = make_project(&[
-            ("a.ts", "const foo = 1;"),
-            ("b.rs", "const foo: i32 = 1;"),
-        ]);
+        let dir = make_project(&[("a.ts", "const foo = 1;"), ("b.rs", "const foo: i32 = 1;")]);
         let o = run(
             &SearchOptions {
                 lang_filter: Some("ts".to_string()),
@@ -373,7 +391,10 @@ mod tests {
     fn context_lines_correct() {
         let dir = make_project(&[("a.rs", "line1\nline2\ntarget\nline4\nline5")]);
         let o = run(
-            &SearchOptions { context: 1, ..opts("target") },
+            &SearchOptions {
+                context: 1,
+                ..opts("target")
+            },
             dir.path(),
         )
         .unwrap();
@@ -385,12 +406,12 @@ mod tests {
 
     #[test]
     fn files_only_mode() {
-        let dir = make_project(&[
-            ("a.rs", "needle"),
-            ("b.rs", "haystack"),
-        ]);
+        let dir = make_project(&[("a.rs", "needle"), ("b.rs", "haystack")]);
         let o = run(
-            &SearchOptions { files_only: true, ..opts("needle") },
+            &SearchOptions {
+                files_only: true,
+                ..opts("needle")
+            },
             dir.path(),
         )
         .unwrap();

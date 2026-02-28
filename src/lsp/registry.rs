@@ -20,9 +20,7 @@ pub enum InstallMethod {
     },
     /// Install via `go install` to `~/.krait/servers/go/bin/`.
     /// Requires `go` in PATH.
-    GoInstall {
-        module: &'static str,
-    },
+    GoInstall { module: &'static str },
 }
 
 /// Archive format for downloaded files.
@@ -182,7 +180,11 @@ pub fn find_managed(binary_name: &str) -> Option<PathBuf> {
     }
 
     // npm bin directory
-    let npm_path = servers_dir().join("npm").join("node_modules").join(".bin").join(binary_name);
+    let npm_path = servers_dir()
+        .join("npm")
+        .join("node_modules")
+        .join(".bin")
+        .join(binary_name);
     if npm_path.exists() {
         return Some(npm_path);
     }
@@ -195,7 +197,8 @@ pub fn find_managed(binary_name: &str) -> Option<PathBuf> {
 
     // go install default output (~/$GOPATH/bin, falls back to ~/go/bin)
     if let Some(home) = dirs::home_dir() {
-        let gopath = std::env::var("GOPATH").map_or_else(|_| home.join("go"), std::path::PathBuf::from);
+        let gopath =
+            std::env::var("GOPATH").map_or_else(|_| home.join("go"), std::path::PathBuf::from);
         let go_default = gopath.join("bin").join(binary_name);
         if go_default.exists() {
             return Some(go_default);
@@ -291,8 +294,7 @@ mod tests {
         if let Some((entry, path)) = result {
             assert!(path.exists());
             assert!(
-                entry.binary_name == "vtsls"
-                    || entry.binary_name == "typescript-language-server"
+                entry.binary_name == "vtsls" || entry.binary_name == "typescript-language-server"
             );
         }
     }
@@ -316,7 +318,10 @@ mod tests {
     #[test]
     fn rust_entry_has_github_release_method() {
         let entry = get_entry(Language::Rust).unwrap();
-        assert!(matches!(entry.install_method, InstallMethod::GithubRelease { .. }));
+        assert!(matches!(
+            entry.install_method,
+            InstallMethod::GithubRelease { .. }
+        ));
     }
 
     #[test]
@@ -331,6 +336,9 @@ mod tests {
     #[test]
     fn go_entry_has_go_install_method() {
         let entry = get_entry(Language::Go).unwrap();
-        assert!(matches!(entry.install_method, InstallMethod::GoInstall { .. }));
+        assert!(matches!(
+            entry.install_method,
+            InstallMethod::GoInstall { .. }
+        ));
     }
 }

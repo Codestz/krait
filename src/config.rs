@@ -166,10 +166,7 @@ pub fn config_to_package_roots(
 
         let abs_path = project_root.join(&entry.path);
         if !abs_path.is_dir() {
-            warn!(
-                "workspace path '{}' does not exist, skipping",
-                entry.path
-            );
+            warn!("workspace path '{}' does not exist, skipping", entry.path);
             continue;
         }
 
@@ -248,8 +245,7 @@ pub fn write_config(project_root: &Path, content: &str) -> anyhow::Result<()> {
 /// Check if a config file already exists.
 #[must_use]
 pub fn config_exists(project_root: &Path) -> bool {
-    project_root.join(CONFIG_FILE).is_file()
-        || project_root.join(LEGACY_CONFIG_FILE).is_file()
+    project_root.join(CONFIG_FILE).is_file() || project_root.join(LEGACY_CONFIG_FILE).is_file()
 }
 
 #[cfg(test)]
@@ -425,7 +421,10 @@ path = "."
 language = "typescript"
 "#;
         let config: ProjectConfig = toml::from_str(content).unwrap();
-        assert_eq!(config.primary_workspaces, vec!["packages/core", "packages/api"]);
+        assert_eq!(
+            config.primary_workspaces,
+            vec!["packages/core", "packages/api"]
+        );
         assert_eq!(config.max_active_sessions, Some(5));
     }
 

@@ -61,7 +61,7 @@ Krait occupies the space in between: a headless LSP client you can use from any 
 
 ## Installation
 
-### From source (requires Rust 1.75+)
+### From source (requires Rust 1.85+)
 
 ```bash
 cargo install krait

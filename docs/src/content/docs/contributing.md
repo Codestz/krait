@@ -7,7 +7,7 @@ description: How to contribute to krait.
 
 ### Prerequisites
 
-- Rust 1.75+ (`rustup update stable`)
+- Rust 1.85+ (`rustup update stable`)
 - A language server for testing (optional):
   - TypeScript: `npm install -g @vtsls/language-server`
   - Rust: `rustup component add rust-analyzer`

@@ -19,7 +19,7 @@ Thank you for your interest in contributing! This document covers everything you
 
 ### Prerequisites
 
-- Rust 1.75 or later (`rustup update stable`)
+- Rust 1.85 or later (`rustup update stable`)
 - A language server for testing (optional but recommended):
   - TypeScript: `npm install -g @vtsls/language-server`
   - Rust: `rustup component add rust-analyzer`

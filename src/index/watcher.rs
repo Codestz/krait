@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use notify_debouncer_full::{Debouncer, FileIdMap, new_debouncer};
 use notify_debouncer_full::notify::{EventKind, RecommendedWatcher, Watcher};
+use notify_debouncer_full::{new_debouncer, Debouncer, FileIdMap};
 use tracing::{debug, info, warn};
 
 use crate::lsp::diagnostics::DiagnosticStore;
@@ -60,9 +60,7 @@ impl DirtyFiles {
         if self.poisoned.load(Ordering::Relaxed) {
             return true;
         }
-        self.inner
-            .read()
-            .is_ok_and(|set| set.contains(rel_path))
+        self.inner.read().is_ok_and(|set| set.contains(rel_path))
     }
 
     /// Clear all dirty entries and reset poison flag.
@@ -115,8 +113,9 @@ pub fn start_watcher(
     diagnostic_store: Option<Arc<DiagnosticStore>>,
 ) -> anyhow::Result<Debouncer<RecommendedWatcher, FileIdMap>> {
     // Canonicalize to match FSEvents paths on macOS
-    let canonical_root =
-        project_root.canonicalize().unwrap_or_else(|_| project_root.to_path_buf());
+    let canonical_root = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
     let ext_set: HashSet<String> = extensions.iter().cloned().collect();
     let df = dirty_files;
 
@@ -128,11 +127,11 @@ pub fn start_watcher(
                 for event in events {
                     match event.kind {
                         // For renames, mark both old and new paths dirty
-                        EventKind::Modify(notify_debouncer_full::notify::event::ModifyKind::Name(_)) => {
+                        EventKind::Modify(
+                            notify_debouncer_full::notify::event::ModifyKind::Name(_),
+                        ) => {
                             for path in &event.paths {
-                                if let Some(rel) =
-                                    to_relative(path, &canonical_root, &ext_set)
-                                {
+                                if let Some(rel) = to_relative(path, &canonical_root, &ext_set) {
                                     debug!("file renamed: {rel}");
                                     df.mark_dirty(rel);
                                     if let Some(store) = &diagnostic_store {
@@ -143,9 +142,7 @@ pub fn start_watcher(
                         }
                         EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
                             for path in &event.paths {
-                                if let Some(rel) =
-                                    to_relative(path, &canonical_root, &ext_set)
-                                {
+                                if let Some(rel) = to_relative(path, &canonical_root, &ext_set) {
                                     debug!("file changed: {rel}");
                                     df.mark_dirty(rel);
                                     if let Some(store) = &diagnostic_store {
@@ -177,9 +174,10 @@ pub fn start_watcher(
         },
     )?;
 
-    debouncer
-        .watcher()
-        .watch(project_root, notify_debouncer_full::notify::RecursiveMode::Recursive)?;
+    debouncer.watcher().watch(
+        project_root,
+        notify_debouncer_full::notify::RecursiveMode::Recursive,
+    )?;
 
     info!("file watcher started on {}", project_root.display());
     Ok(debouncer)

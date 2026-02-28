@@ -317,7 +317,15 @@ mod tests {
     #[test]
     fn cli_parses_read_file_with_flags() {
         let cli = Cli::try_parse_from([
-            "krait", "read", "file", "src/lib.rs", "--from", "5", "--to", "10", "--max-lines",
+            "krait",
+            "read",
+            "file",
+            "src/lib.rs",
+            "--from",
+            "5",
+            "--to",
+            "10",
+            "--max-lines",
             "20",
         ])
         .unwrap();
