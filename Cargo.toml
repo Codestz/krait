@@ -37,7 +37,7 @@ toml = "0.8"
 blake3 = "1"
 
 # SQLite symbol index
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
 
 # Project file walking (.gitignore-aware)
 ignore = "0.4"
