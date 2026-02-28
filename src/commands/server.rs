@@ -141,7 +141,7 @@ pub async fn handle_install(
             let managed = managed_dir.join(preferred.binary_name);
             if managed.exists() {
                 std::fs::remove_file(&managed).unwrap_or_else(|e| {
-                    tracing::warn!("could not remove {}: {e}", managed.display())
+                    tracing::warn!("could not remove {}: {e}", managed.display());
                 });
             }
         }

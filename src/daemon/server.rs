@@ -486,17 +486,13 @@ async fn handle_find_symbol(
                     "find_symbol cache hit for '{name}' ({} results)",
                     results.len()
                 );
-                let filtered = filter_by_path(results, path_filter);
-                let filtered = if src_only {
-                    filter_src_only(filtered, &state.project_root)
-                } else {
-                    filtered
-                };
-                let filtered = if include_body {
-                    populate_bodies(filtered, &state.project_root)
-                } else {
-                    filtered
-                };
+                let filtered = postprocess_symbols(
+                    results,
+                    path_filter,
+                    src_only,
+                    include_body,
+                    &state.project_root,
+                );
                 return Response::ok(serde_json::to_value(filtered).unwrap_or_default());
             }
         }
@@ -560,12 +556,8 @@ async fn handle_find_symbol(
                 .await
                 .unwrap_or_default();
 
-        let filtered = filter_by_path(fallback, path_filter);
-        let filtered = if src_only {
-            filter_src_only(filtered, &state.project_root)
-        } else {
-            filtered
-        };
+        let filtered =
+            postprocess_symbols(fallback, path_filter, src_only, false, &state.project_root);
         if filtered.is_empty() {
             return Response::ok(json!([]));
         }
@@ -576,17 +568,13 @@ async fn handle_find_symbol(
         };
         Response::ok(serde_json::to_value(filtered).unwrap_or_default())
     } else {
-        let filtered = filter_by_path(merged, path_filter);
-        let filtered = if src_only {
-            filter_src_only(filtered, &state.project_root)
-        } else {
-            filtered
-        };
-        let filtered = if include_body {
-            populate_bodies(filtered, &state.project_root)
-        } else {
-            filtered
-        };
+        let filtered = postprocess_symbols(
+            merged,
+            path_filter,
+            src_only,
+            include_body,
+            &state.project_root,
+        );
         Response::ok(serde_json::to_value(filtered).unwrap_or_default())
     }
 }
@@ -702,6 +690,27 @@ async fn handle_find_refs(name: &str, with_symbol: bool, state: &DaemonState) ->
             enrich_with_symbols(&mut refs, state).await;
         }
         Response::ok(serde_json::to_value(refs).unwrap_or_default())
+    }
+}
+
+/// Apply path filter, src-only filter, and optional body population in one pass.
+fn postprocess_symbols(
+    symbols: Vec<find::SymbolMatch>,
+    path_filter: Option<&str>,
+    src_only: bool,
+    include_body: bool,
+    project_root: &Path,
+) -> Vec<find::SymbolMatch> {
+    let filtered = filter_by_path(symbols, path_filter);
+    let filtered = if src_only {
+        filter_src_only(filtered, project_root)
+    } else {
+        filtered
+    };
+    if include_body {
+        populate_bodies(filtered, project_root)
+    } else {
+        filtered
     }
 }
 
