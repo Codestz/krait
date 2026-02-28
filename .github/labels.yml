@@ -1,0 +1,98 @@
+# Type
+- name: feature
+  color: '0075ca'
+  description: New feature or request
+
+- name: enhancement
+  color: 'a2eeef'
+  description: Improvement to an existing feature
+
+- name: bug
+  color: 'd73a4a'
+  description: Something isn't working
+
+- name: fix
+  color: 'e4e669'
+  description: Bug fix
+
+- name: breaking-change
+  color: 'b60205'
+  description: Introduces a breaking API change
+
+- name: major
+  color: 'b60205'
+  description: Triggers a major version bump
+
+# Areas
+- name: performance
+  color: 'f9d0c4'
+  description: Performance improvement
+
+- name: security
+  color: 'ee0701'
+  description: Security fix or improvement
+
+- name: documentation
+  color: '0075ca'
+  description: Improvements or additions to documentation
+
+- name: docs
+  color: '0075ca'
+  description: Improvements or additions to documentation
+
+- name: lsp
+  color: '5319e7'
+  description: Related to LSP client or language servers
+
+- name: daemon
+  color: '5319e7'
+  description: Related to the krait daemon
+
+- name: index
+  color: '5319e7'
+  description: Related to the SQLite symbol index
+
+- name: cli
+  color: '5319e7'
+  description: Related to the CLI interface
+
+# Process
+- name: chore
+  color: 'fef2c0'
+  description: Build process, tooling, or maintenance
+
+- name: refactor
+  color: 'fef2c0'
+  description: Code refactoring without behavior change
+
+- name: dependencies
+  color: 'fef2c0'
+  description: Dependency updates
+
+- name: good first issue
+  color: '7057ff'
+  description: Good for newcomers
+
+- name: help wanted
+  color: '008672'
+  description: Extra attention is needed
+
+- name: question
+  color: 'd876e3'
+  description: Further information is requested
+
+- name: wontfix
+  color: 'ffffff'
+  description: This will not be worked on
+
+- name: duplicate
+  color: 'cfd3d7'
+  description: This issue or PR already exists
+
+- name: invalid
+  color: 'e4e669'
+  description: This doesn't seem right
+
+- name: skip-changelog
+  color: 'ededed'
+  description: Exclude from release notes
