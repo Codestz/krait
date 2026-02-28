@@ -1,62 +1,51 @@
-name-template: 'v$RESOLVED_VERSION'
-tag-template: 'v$RESOLVED_VERSION'
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
 
 categories:
-  - title: '🚀 Features'
+  - title: "Breaking Changes"
     labels:
-      - 'feature'
-      - 'enhancement'
-  - title: '🐛 Bug Fixes'
+      - breaking
+  - title: "New Features"
     labels:
-      - 'bug'
-      - 'fix'
-  - title: '⚡ Performance'
+      - enhancement
+  - title: "Bug Fixes"
     labels:
-      - 'performance'
-  - title: '🔒 Security'
+      - bug
+  - title: "Performance"
     labels:
-      - 'security'
-  - title: '📚 Documentation'
+      - performance
+  - title: "Documentation"
     labels:
-      - 'documentation'
-      - 'docs'
-  - title: '🔧 Maintenance'
+      - documentation
+  - title: "Dependencies"
     labels:
-      - 'chore'
-      - 'dependencies'
-      - 'refactor'
+      - dependencies
+  - title: "CI / Infrastructure"
+    labels:
+      - ci
 
-change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
 change-title-escapes: '\<*_&'
 
 version-resolver:
   major:
     labels:
-      - 'breaking-change'
-      - 'major'
+      - breaking
   minor:
     labels:
-      - 'feature'
-      - 'enhancement'
+      - enhancement
   patch:
     labels:
-      - 'bug'
-      - 'fix'
-      - 'performance'
-      - 'security'
-      - 'documentation'
-      - 'docs'
-      - 'chore'
-      - 'dependencies'
-      - 'refactor'
+      - bug
+      - performance
+      - documentation
+      - dependencies
+      - ci
   default: patch
-
-exclude-labels:
-  - 'skip-changelog'
 
 template: |
   ## What's Changed
 
   $CHANGES
 
-  **Full Changelog**: https://github.com/Codestz/krait/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+  **Full Changelog**: $PREVIOUS_TAG...v$RESOLVED_VERSION
