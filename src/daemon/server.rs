@@ -150,6 +150,23 @@ impl DaemonState {
     }
 }
 
+/// Ensure every detected language has at least one workspace root.
+///
+/// Languages found via file-extension scan (e.g. Makefile-based C projects) won't
+/// appear in `roots` from `find_package_roots()` — fall back to the project root
+/// so the LSP pool has a slot for them.
+fn add_missing_language_roots(
+    languages: &[Language],
+    roots: &mut Vec<(Language, PathBuf)>,
+    project_root: &Path,
+) {
+    for &lang in languages {
+        if !roots.iter().any(|(l, _)| *l == lang) {
+            roots.push((lang, project_root.to_path_buf()));
+        }
+    }
+}
+
 /// Run the daemon's accept loop until shutdown is requested or idle timeout fires.
 ///
 /// # Errors
@@ -169,7 +186,7 @@ pub async fn run_server(
     // Load config: krait.toml → .krait/config.toml → auto-detection
     let loaded = config::load(project_root);
     let config_source = loaded.source.clone();
-    let package_roots = if let Some(ref cfg) = loaded.config {
+    let mut package_roots = if let Some(ref cfg) = loaded.config {
         let roots = config::config_to_package_roots(cfg, project_root);
         info!(
             "config: {} ({} workspaces)",
@@ -180,6 +197,8 @@ pub async fn run_server(
     } else {
         detect::find_package_roots(project_root)
     };
+
+    add_missing_language_roots(&languages, &mut package_roots, project_root);
 
     if package_roots.len() > 1 {
         if loaded.config.is_none() {

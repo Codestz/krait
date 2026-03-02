@@ -197,7 +197,22 @@ pub fn cached_read_symbol(
             .into_iter()
             .find(|s| s.name == child && s.parent_name.as_deref() == Some(search_name))?
     } else {
-        symbols.into_iter().next()?
+        // For C/C++: the index may return the header declaration before the source
+        // definition (alphabetical path order: include/ before src/). Prefer the
+        // source file when both exist.
+        const HEADER_EXTS: &[&str] = &["h", "hpp", "hxx", "hh"];
+        let preferred = symbols
+            .iter()
+            .find(|s| {
+                let ext = std::path::Path::new(&s.path)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("");
+                !HEADER_EXTS.contains(&ext)
+            })
+            .or_else(|| symbols.first())
+            .cloned();
+        preferred?
     };
 
     // Check file freshness
