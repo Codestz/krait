@@ -65,6 +65,24 @@ pub async fn resolve_symbol_range(
     // Support nested names: "Config.new" → find "Config", then child "new"
     let parts: Vec<&str> = name.split('.').collect();
 
+    // Go-specific: gopls returns receiver methods as flat entries like
+    // "(*Handler).CreateSession" rather than as children of the struct.
+    // Try this before the normal tree-walk for dotted names in .go files.
+    if parts.len() == 2 && file_path.extension().and_then(|e| e.to_str()) == Some("go") {
+        if let Some(sym) = tree
+            .iter()
+            .find(|s| crate::lang::go::receiver_method_matches(&s.name, parts[0], parts[1]))
+        {
+            return Ok(SymbolLocation {
+                name: sym.name.clone(),
+                kind: sym.kind.clone(),
+                start_line: sym.start_line,
+                end_line: sym.end_line,
+                children: Vec::new(),
+            });
+        }
+    }
+
     let mut current_list = &tree;
     let mut result: Option<&SymbolLocation> = None;
 

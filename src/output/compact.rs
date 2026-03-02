@@ -199,11 +199,22 @@ fn format_init(data: &Value) -> String {
         String::new()
     };
 
-    if cached > 0 {
+    let mut out = if cached > 0 {
         format!("indexed {files}/{total} files ({cached} cached), {symbols} symbols{time_str}")
     } else {
         format!("indexed {files} files, {symbols} symbols{time_str}")
+    };
+
+    if let Some(warnings) = data.get("warnings").and_then(|v| v.as_array()) {
+        for w in warnings {
+            if let Some(msg) = w.as_str() {
+                out.push_str("\nwarn  ");
+                out.push_str(msg);
+            }
+        }
     }
+
+    out
 }
 
 fn format_file_content(data: &Value) -> String {

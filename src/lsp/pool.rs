@@ -1008,7 +1008,7 @@ fn default_server_name(lang: Language) -> String {
 ///
 /// Uses `wait_for_response_with_timeout` so every response is consumed internally —
 /// no orphaned responses in the transport pipe. Budget: 5 × (2s + 500ms) ≈ 12.5s max.
-async fn probe_until_ready(client: &mut LspClient, warmup_file: &std::path::Path) {
+pub(crate) async fn probe_until_ready(client: &mut LspClient, warmup_file: &std::path::Path) {
     use super::client::path_to_uri;
 
     const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -1057,7 +1057,7 @@ async fn probe_until_ready(client: &mut LspClient, warmup_file: &std::path::Path
 }
 
 /// Find a single representative source file to open for warmup.
-fn find_warmup_file(workspace_root: &Path, lang: Language) -> Option<PathBuf> {
+pub(crate) fn find_warmup_file(workspace_root: &Path, lang: Language) -> Option<PathBuf> {
     let extensions = lang.extensions();
     let search_dirs = [
         workspace_root.join("src"),

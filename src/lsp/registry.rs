@@ -21,6 +21,9 @@ pub enum InstallMethod {
     /// Install via `go install` to `~/.krait/servers/go/bin/`.
     /// Requires `go` in PATH.
     GoInstall { module: &'static str },
+    /// Install via Homebrew (`brew install <package>`).
+    /// Requires `brew` in PATH.
+    Homebrew { package: &'static str },
 }
 
 /// Archive format for downloaded files.
@@ -38,6 +41,9 @@ pub struct ServerEntry {
     pub args: &'static [&'static str],
     pub install_method: InstallMethod,
     pub install_advice: &'static str,
+    /// Optional runtime command that must be in PATH for the server to function.
+    /// e.g. gopls requires `go` to be installed even though gopls itself is a binary.
+    pub requires_cmd: Option<&'static str>,
 }
 
 /// Get all server entries for a language, in preference order.
@@ -57,6 +63,7 @@ pub fn get_entries(language: Language) -> Vec<ServerEntry> {
                 archive: ArchiveType::Gzip,
             },
             install_advice: "Install: `rustup component add rust-analyzer`",
+            requires_cmd: None,
         }],
         Language::TypeScript | Language::JavaScript => vec![
             ServerEntry {
@@ -67,8 +74,8 @@ pub fn get_entries(language: Language) -> Vec<ServerEntry> {
                     package: "@vtsls/language-server",
                     extra_packages: &["typescript"],
                 },
-                install_advice:
-                    "Install: `npm install -g @vtsls/language-server typescript`",
+                install_advice: "Install: `npm install -g @vtsls/language-server typescript`",
+                requires_cmd: None,
             },
             ServerEntry {
                 language,
@@ -80,17 +87,29 @@ pub fn get_entries(language: Language) -> Vec<ServerEntry> {
                 },
                 install_advice:
                     "Install: `npm install -g typescript-language-server typescript`",
+                requires_cmd: None,
             },
         ],
-        Language::Go => vec![ServerEntry {
-            language,
-            binary_name: "gopls",
-            args: &["serve"],
-            install_method: InstallMethod::GoInstall {
-                module: "golang.org/x/tools/gopls@latest",
+        Language::Go => vec![
+            ServerEntry {
+                language,
+                binary_name: "gopls",
+                args: &["serve"],
+                install_method: InstallMethod::GoInstall {
+                    module: "golang.org/x/tools/gopls@latest",
+                },
+                install_advice: "Install: `go install golang.org/x/tools/gopls@latest`",
+                requires_cmd: Some("go"),
             },
-            install_advice: "Install: `go install golang.org/x/tools/gopls@latest`",
-        }],
+            ServerEntry {
+                language,
+                binary_name: "gopls",
+                args: &["serve"],
+                install_method: InstallMethod::Homebrew { package: "gopls" },
+                install_advice: "Install: `brew install gopls` (also requires `go` in PATH)",
+                requires_cmd: Some("go"),
+            },
+        ],
         Language::Cpp => vec![ServerEntry {
             language,
             binary_name: "clangd",
@@ -101,6 +120,7 @@ pub fn get_entries(language: Language) -> Vec<ServerEntry> {
                 archive: ArchiveType::Gzip,
             },
             install_advice: "Install: `brew install llvm` (includes clangd) or download from https://github.com/clangd/clangd/releases",
+            requires_cmd: None,
         }],
     }
 }

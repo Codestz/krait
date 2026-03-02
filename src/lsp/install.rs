@@ -21,6 +21,15 @@ pub async fn ensure_server(language: Language) -> anyhow::Result<(PathBuf, Serve
     // 1. Try all entries in preference order (e.g., vtsls → typescript-language-server)
     if let Some((entry, path)) = resolve_server(language) {
         debug!("found {}: {}", entry.binary_name, path.display());
+        // Check runtime prerequisite (e.g., gopls needs `go` in PATH to analyze modules).
+        if let Some(cmd) = entry.requires_cmd {
+            if !command_exists(cmd) {
+                anyhow::bail!(
+                    "{} is installed but requires `{cmd}` in PATH to function.\n  Install Go: https://go.dev/dl/",
+                    entry.binary_name
+                );
+            }
+        }
         return Ok((path, entry));
     }
 
@@ -51,6 +60,7 @@ pub async fn download_server(entry: &ServerEntry) -> anyhow::Result<PathBuf> {
             extra_packages,
         } => download_npm(entry, &dir, package, extra_packages).await,
         InstallMethod::GoInstall { module } => download_go(entry, &dir, module).await,
+        InstallMethod::Homebrew { package } => download_homebrew(entry, package).await,
     }
 }
 
@@ -255,6 +265,41 @@ async fn download_go(entry: &ServerEntry, dir: &Path, module: &str) -> anyhow::R
         bin_path.display()
     );
     Ok(bin_path)
+}
+
+/// Install a binary via Homebrew (`brew install <package>`).
+///
+/// Homebrew installs to its prefix (e.g. `/opt/homebrew/bin` on Apple Silicon),
+/// which is already in PATH. So we just run `brew install` and then re-resolve
+/// the binary from PATH.
+async fn download_homebrew(entry: &ServerEntry, package: &str) -> anyhow::Result<PathBuf> {
+    if !command_exists("brew") {
+        bail!(
+            "Homebrew is required for {} but not found in PATH.\n  {}",
+            entry.binary_name,
+            entry.install_advice
+        );
+    }
+
+    let status = tokio::process::Command::new("brew")
+        .args(["install", package])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .status()
+        .await
+        .context("failed to run brew install")?;
+
+    if !status.success() {
+        bail!(
+            "brew install failed for {}.\n  {}",
+            package,
+            entry.install_advice
+        );
+    }
+
+    // Homebrew puts binaries in its prefix/bin, which should be in PATH
+    which::which(entry.binary_name)
+        .with_context(|| format!("{} not found in PATH after brew install", entry.binary_name))
 }
 
 /// Check if a command exists in PATH.

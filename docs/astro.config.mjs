@@ -41,6 +41,7 @@ export default defineConfig({
             { label: 'How It Works', link: '/how-it-works/' },
           ],
         },
+        { label: 'Troubleshooting', link: '/troubleshooting/' },
         { label: 'Contributing', link: '/contributing/' },
       ],
       head: [
