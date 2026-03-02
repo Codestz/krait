@@ -122,6 +122,7 @@ pub fn detect_languages(root: &Path) -> Vec<Language> {
         .workspace_markers()
         .iter()
         .any(|m| root.join(m).exists())
+        || has_c_files(root)
     {
         languages.push(Language::Cpp);
     }
@@ -171,6 +172,35 @@ fn has_ts_files(root: &Path) -> bool {
                 .extension()
                 .and_then(|x| x.to_str())
                 .is_some_and(|x| ts_exts.contains(&x))
+        }) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns true if the project root (or its `src/` subdirectory) contains C/C++ source files.
+/// Handles Makefile-based and legacy C/C++ projects that lack `CMakeLists.txt` or
+/// `compile_commands.json`.
+fn has_c_files(root: &Path) -> bool {
+    // C source extensions (not headers — headers alone don't indicate a buildable project)
+    const C_SRC_EXTS: &[&str] = &["c", "cpp", "cc", "cxx"];
+
+    let mut dirs = vec![root.to_path_buf()];
+    let src = root.join("src");
+    if src.is_dir() {
+        dirs.push(src);
+    }
+
+    for dir in &dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        if entries.filter_map(Result::ok).any(|e| {
+            e.path()
+                .extension()
+                .and_then(|x| x.to_str())
+                .is_some_and(|x| C_SRC_EXTS.contains(&x))
         }) {
             return true;
         }
@@ -266,6 +296,54 @@ mod tests {
     #[test]
     fn empty_project_returns_empty() {
         let dir = tempfile::tempdir().unwrap();
+        let langs = detect_languages(dir.path());
+        assert!(langs.is_empty());
+    }
+
+    #[test]
+    fn detects_cpp_from_cmake() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("CMakeLists.txt"), "").unwrap();
+
+        let langs = detect_languages(dir.path());
+        assert_eq!(langs, vec![Language::Cpp]);
+    }
+
+    #[test]
+    fn detects_c_project_from_root_c_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("main.c"), "int main() {}").unwrap();
+
+        let langs = detect_languages(dir.path());
+        assert_eq!(langs, vec![Language::Cpp]);
+    }
+
+    #[test]
+    fn detects_c_project_from_src_c_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/app.c"), "").unwrap();
+
+        let langs = detect_languages(dir.path());
+        assert_eq!(langs, vec![Language::Cpp]);
+    }
+
+    #[test]
+    fn detects_cpp_project_from_src_cpp_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/main.cpp"), "").unwrap();
+
+        let langs = detect_languages(dir.path());
+        assert_eq!(langs, vec![Language::Cpp]);
+    }
+
+    #[test]
+    fn headers_only_not_detected_as_c() {
+        // .h files alone shouldn't trigger C detection (could be headers for another language)
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("config.h"), "").unwrap();
+
         let langs = detect_languages(dir.path());
         assert!(langs.is_empty());
     }

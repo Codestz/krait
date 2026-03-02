@@ -46,6 +46,9 @@ pub async fn find_symbol(
     Ok(parse_symbol_results(&response, name, project_root))
 }
 
+/// Header file extensions — used to prefer source definitions over declarations.
+const HEADER_EXTS: &[&str] = &["h", "hpp", "hxx", "hh"];
+
 /// Resolve a symbol name to its absolute file path and 0-indexed (line, character) position.
 ///
 /// Uses `workspace/symbol` to locate the symbol, then `find_name_position` to find
@@ -70,8 +73,18 @@ pub async fn resolve_symbol_location(
     } else {
         lsp_symbols
     };
+    // For C/C++: clangd returns both the header declaration and the source definition.
+    // Prefer the source file (the definition) over the header (the declaration).
     let symbol = symbols
-        .first()
+        .iter()
+        .find(|s| {
+            let ext = std::path::Path::new(&s.path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            !HEADER_EXTS.contains(&ext)
+        })
+        .or_else(|| symbols.first())
         .with_context(|| format!("symbol '{name}' not found"))?;
 
     let abs_path = project_root.join(&symbol.path);
