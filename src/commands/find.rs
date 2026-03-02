@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use serde_json::{json, Value};
+use tracing::debug;
 
 use crate::lang::go as lang_go;
 use crate::lsp::client::{self, LspClient};
@@ -192,6 +193,69 @@ fn classify_definition<'a>(line: &str, name: &str) -> Option<&'a str> {
     Some(kind)
 }
 
+/// Find a Go receiver method by `"Receiver.Method"` dotted notation.
+///
+/// gopls workspace/symbol returns methods as flat `"(*Receiver).Method"` entries.
+/// This searches for the method name and filters results using `receiver_method_matches`.
+///
+/// Returns `(symbol, token)` where `token` is the bare method name to use for
+/// position lookup in the source file.
+async fn find_go_receiver_method(
+    name: &str,
+    client: &mut LspClient,
+    project_root: &Path,
+) -> anyhow::Result<Option<(SymbolMatch, String)>> {
+    let Some(dot) = name.find('.') else {
+        return Ok(None);
+    };
+    let receiver = &name[..dot];
+    let method = &name[dot + 1..];
+
+    let params = json!({ "query": method });
+    let request_id = client
+        .transport_mut()
+        .send_request("workspace/symbol", params)
+        .await?;
+    let response = client
+        .wait_for_response_public(request_id)
+        .await
+        .context("workspace/symbol request failed")?;
+
+    let Some(items) = response.as_array() else {
+        return Ok(None);
+    };
+
+    debug!(
+        "find_go_receiver_method: got {} items for query '{method}'",
+        items.len()
+    );
+    for item in items {
+        let sym_name = item.get("name").and_then(Value::as_str).unwrap_or_default();
+        let matches = crate::lang::go::receiver_method_matches(sym_name, receiver, method);
+        debug!("  sym_name={sym_name:?} receiver_method_matches({receiver},{method})={matches}");
+        if !matches {
+            continue;
+        }
+        let (path, line) = extract_location(item, project_root);
+        let preview = read_line_preview(&project_root.join(&path), line);
+        let kind =
+            symbol_kind_name(item.get("kind").and_then(Value::as_u64).unwrap_or(0)).to_string();
+        return Ok(Some((
+            SymbolMatch {
+                path,
+                line,
+                kind,
+                preview,
+                body: None,
+            },
+            method.to_string(),
+        )));
+    }
+
+    debug!("find_go_receiver_method: no match found for '{name}'");
+    Ok(None)
+}
+
 /// Find all references to a symbol using `textDocument/references`.
 ///
 /// First resolves the symbol's location via `workspace/symbol`, then
@@ -205,11 +269,38 @@ pub async fn find_refs(
     file_tracker: &mut FileTracker,
     project_root: &Path,
 ) -> anyhow::Result<Vec<ReferenceMatch>> {
-    // Step 1: Find the symbol definition
+    // Step 1: Find the symbol definition.
+    // For dotted Go receiver methods ("Handler.CreateSession"), workspace/symbol
+    // won't match the full dotted name — fall back to receiver method search.
     let symbols = find_symbol(name, client, project_root).await?;
-    let symbol = symbols
-        .first()
-        .with_context(|| format!("symbol '{name}' not found"))?;
+    debug!(
+        "find_refs: find_symbol('{name}') returned {} results",
+        symbols.len()
+    );
+    let (symbol, token) = if let Some(sym) = symbols.into_iter().next() {
+        debug!("find_refs: direct match at {}:{}", sym.path, sym.line);
+        // For Go receiver method notation "Handler.CreateSession", Go source files
+        // contain "CreateSession" as the method token, not "Handler.CreateSession".
+        // Use only the method part for position lookup to find the right character offset.
+        let token = if Path::new(&sym.path).extension().and_then(|e| e.to_str()) == Some("go")
+            && name.contains('.')
+        {
+            name.rsplit('.').next().unwrap_or(name).to_string()
+        } else {
+            name.to_string()
+        };
+        (sym, token)
+    } else if name.contains('.') {
+        debug!("find_refs: no direct match, trying go receiver method path");
+        let result = find_go_receiver_method(name, client, project_root).await?;
+        debug!(
+            "find_refs: find_go_receiver_method returned: {}",
+            result.is_some()
+        );
+        result.with_context(|| format!("symbol '{name}' not found"))?
+    } else {
+        anyhow::bail!("symbol '{name}' not found");
+    };
 
     // Step 2: Open the file containing the definition and let the server process it
     let abs_path = project_root.join(&symbol.path);
@@ -224,7 +315,7 @@ pub async fn find_refs(
 
     // Step 3: Send references request at the symbol position (single attempt)
     let uri = crate::lsp::client::path_to_uri(&abs_path)?;
-    let (ref_line, ref_char) = find_name_position(&abs_path, symbol.line, name);
+    let (ref_line, ref_char) = find_name_position(&abs_path, symbol.line, &token);
 
     let params = json!({
         "textDocument": { "uri": uri.as_str() },

@@ -7,7 +7,7 @@ use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{watch, Mutex};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::commands::{check, edit, find, fix, format as fmt, hover, list, read, rename};
 use crate::config::{self, ConfigSource};
@@ -998,8 +998,9 @@ async fn handle_init(state: &DaemonState) -> Response {
 
     // Phase 2: query LSP for symbols — one server per language
     let phase2_start = Instant::now();
-    let all_results = match collect_symbols_parallel(state, files_to_index).await {
-        Ok(results) => results,
+    let (all_results, index_warnings) = match collect_symbols_parallel(state, files_to_index).await
+    {
+        Ok(pair) => pair,
         Err(resp) => return resp,
     };
     let phase2_dur = phase2_start.elapsed();
@@ -1048,7 +1049,7 @@ async fn handle_init(state: &DaemonState) -> Response {
     state.dirty_files.clear();
 
     let num_workers = builder::detect_worker_count();
-    Response::ok(json!({
+    let mut resp = json!({
         "message": "index built",
         "db_path": db_path.display().to_string(),
         "files_total": files_total,
@@ -1060,7 +1061,11 @@ async fn handle_init(state: &DaemonState) -> Response {
         "workers": num_workers,
         "phase2_lsp_ms": phase2_dur.as_millis(),
         "phase3_commit_ms": phase3_dur.as_millis(),
-    }))
+    });
+    if !index_warnings.is_empty() {
+        resp["warnings"] = json!(index_warnings);
+    }
+    Response::ok(resp)
 }
 
 /// Phase 1: plan which files need indexing (sync, no LSP).
@@ -1088,7 +1093,13 @@ fn plan_index_phase(
 async fn collect_symbols_parallel(
     state: &DaemonState,
     files_to_index: Vec<builder::FileEntry>,
-) -> Result<Vec<(String, String, Vec<crate::index::store::CachedSymbol>)>, Response> {
+) -> Result<
+    (
+        Vec<(String, String, Vec<crate::index::store::CachedSymbol>)>,
+        Vec<String>,
+    ),
+    Response,
+> {
     let num_workers = builder::detect_worker_count();
     info!("init: workers={num_workers} (based on system resources)");
 
@@ -1108,7 +1119,7 @@ async fn collect_symbols_parallel(
         ));
     }
 
-    let mut handles = Vec::new();
+    let mut handles: Vec<(crate::detect::Language, tokio::task::JoinHandle<_>)> = Vec::new();
     for lang in &languages {
         let lang_files: Vec<builder::FileEntry> = files_to_index
             .iter()
@@ -1130,21 +1141,31 @@ async fn collect_symbols_parallel(
         );
         let lang = *lang;
         let root = state.project_root.clone();
-        handles.push(tokio::spawn(async move {
-            builder::collect_symbols_parallel(lang_files, lang, &root, num_workers).await
-        }));
+        handles.push((
+            lang,
+            tokio::spawn(async move {
+                builder::collect_symbols_parallel(lang_files, lang, &root, num_workers).await
+            }),
+        ));
     }
 
     let mut all_results = Vec::new();
-    for handle in handles {
+    let mut warnings = Vec::new();
+    for (lang, handle) in handles {
         match handle.await {
             Ok(Ok(results)) => all_results.extend(results),
-            Ok(Err(e)) => debug!("init: worker error: {e}"),
-            Err(e) => debug!("init: task panicked: {e}"),
+            Ok(Err(e)) => {
+                warn!("init: {lang} indexing failed: {e}");
+                warnings.push(format!("{lang}: {e}"));
+            }
+            Err(e) => {
+                warn!("init: {lang} task panicked: {e}");
+                warnings.push(format!("{lang}: internal error ({e})"));
+            }
         }
     }
 
-    Ok(all_results)
+    Ok((all_results, warnings))
 }
 
 /// Phase 3: commit results to the index store (sync, no LSP).

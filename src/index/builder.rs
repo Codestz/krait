@@ -13,6 +13,7 @@ use crate::detect::Language;
 use crate::lsp::client::{path_to_uri, LspClient};
 use crate::lsp::files::FileTracker;
 use crate::lsp::install;
+use crate::lsp::pool::probe_until_ready;
 
 /// Statistics from an index build.
 #[derive(Debug, Default)]
@@ -136,14 +137,17 @@ pub async fn collect_symbols_parallel(
     // Boot N temporary LSP servers in parallel
     let boot_start = std::time::Instant::now();
     let (binary_path, entry) = install::ensure_server(lang).await?;
+    // Use the first file in the list as a warmup probe target (guaranteed to exist).
+    let warmup_file = files[0].abs_path.clone();
     let mut boot_handles = Vec::new();
     for i in 0..num_workers {
         let bp = binary_path.clone();
         let args: Vec<String> = entry.args.iter().map(|s| (*s).to_string()).collect();
         let wr = workspace_root.to_path_buf();
+        let wf = warmup_file.clone();
         boot_handles.push(tokio::spawn(async move {
             let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-            (i, boot_temp_worker(&bp, &args_refs, lang, &wr).await)
+            (i, boot_temp_worker(&bp, &args_refs, lang, &wr, &wf).await)
         }));
     }
 
@@ -217,8 +221,9 @@ async fn collect_with_single_worker(
     batch_size: usize,
 ) -> anyhow::Result<Vec<(String, String, Vec<CachedSymbol>)>> {
     let (binary_path, entry) = install::ensure_server(lang).await?;
+    let warmup_file = files[0].abs_path.clone();
     let (mut client, mut tracker) =
-        boot_temp_worker(&binary_path, entry.args, lang, workspace_root).await?;
+        boot_temp_worker(&binary_path, entry.args, lang, workspace_root, &warmup_file).await?;
 
     let file_refs: Vec<&FileEntry> = files.iter().collect();
     let results = collect_symbols(&file_refs, &mut client, &mut tracker, batch_size).await;
@@ -230,11 +235,16 @@ async fn collect_with_single_worker(
 }
 
 /// Boot a temporary LSP server for indexing (not part of the pool).
+///
+/// `warmup_file` is the first file the caller intends to index — it's used to probe
+/// the server until its workspace view is ready (needed by gopls, which returns
+/// `"no views"` if queried before it finishes loading the go.mod).
 async fn boot_temp_worker(
     binary_path: &Path,
     args: &[&str],
     lang: Language,
     workspace_root: &Path,
+    warmup_file: &Path,
 ) -> anyhow::Result<(LspClient, FileTracker)> {
     let mut client = LspClient::start_with_binary(binary_path, args, lang, workspace_root)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -242,7 +252,16 @@ async fn boot_temp_worker(
         .initialize(workspace_root)
         .await
         .context("LSP initialize failed")?;
-    let tracker = FileTracker::new(lang);
+    let mut tracker = FileTracker::new(lang);
+    // Open the warmup file and probe until the server is ready.
+    // gopls returns "no views" if queried before it finishes loading the module graph.
+    if tracker
+        .ensure_open(warmup_file, client.transport_mut())
+        .await
+        .is_ok()
+    {
+        probe_until_ready(&mut client, warmup_file).await;
+    }
     Ok((client, tracker))
 }
 
