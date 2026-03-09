@@ -104,7 +104,8 @@ jobs:
       - name: Upload binaries and publish release
         run: |
           gh release upload "$GITHUB_REF_NAME" artifacts/*.tar.gz \
-            --repo "$GITHUB_REPOSITORY"
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
           gh release edit "$GITHUB_REF_NAME" \
             --draft=false \
             --prerelease=${{ contains(github.ref_name, '-') }} \
