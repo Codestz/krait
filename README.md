@@ -64,7 +64,7 @@ Krait occupies the space in between: a headless LSP client you can use from any 
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew tap Codestz/krait
+brew tap Codestz/tap
 brew install krait
 ```
 
