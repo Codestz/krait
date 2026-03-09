@@ -61,7 +61,7 @@ libc = "0.2"
 dirs = "6"
 
 # Binary lookup in PATH
-which = "7"
+which = "8"
 
 # Logging
 tracing = "0.1"
