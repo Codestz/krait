@@ -31,7 +31,7 @@ lsp-types = "0.97"
 url = "2"
 
 # Config file parsing
-toml = "0.8"
+toml = "1.1"
 
 # Hashing for project root -> socket path + file content hashing
 blake3 = "1"
